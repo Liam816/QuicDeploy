@@ -1,4 +1,4 @@
-# QuicInfer
+# QuicDeploy
 
 模型推理 → 驱动真实双臂 Piper-X 的独立部署项目。
 Model inference driving real dual Piper-X arms, extracted from
@@ -11,12 +11,12 @@ Model inference driving real dual Piper-X arms, extracted from
 ## 快速开始 / Quick start
 
 ```bash
-cd /home/ih/heping/projects/QuicInfer
+cd /home/ih/heping/projects/QuicDeploy
 bash scripts/setup_env.sh                       # 创建 .venv（首次）
 bash scripts/start_live.sh --check              # 配置 + 模型完整性 + 硬件在位，不运动
 bash scripts/start_live.sh --run                # 使能双臂、回初始位、运行策略
 PIPER_DIAGNOSTICS=1 bash scripts/start_live.sh --run --duration 120   # 保存每次预测
-QUICINFER_MODEL=configs/models/lva_pick2box_ep057_fp16.json bash scripts/start_live.sh --run
+QUICDEPLOY_MODEL=configs/models/lva_pick2box_ep057_fp16.json bash scripts/start_live.sh --run
 ```
 
 运行时按键：`←` 平滑回初始位并暂停；`→` 从新观测恢复；`Ctrl+C` 停止。
@@ -25,10 +25,10 @@ QUICINFER_MODEL=configs/models/lva_pick2box_ep057_fp16.json bash scripts/start_l
 
 ```
 start_live.sh
-  ├─ quicinfer check       配置解析 + 模型产物哈希校验（不连硬件）
-  ├─ quicinfer preflight   CAN 1Mbps / USB 序列号左右映射 / 相机设备节点（不发指令）
-  └─ quicinfer live --run  LiveSession
-        ├─ Kinematics       IK 子进程（quest3 env 中的 piper_differential_ik）+ FK/IK 自检
+  ├─ quicdeploy check       配置解析 + 模型产物哈希校验（不连硬件）
+  ├─ quicdeploy preflight   CAN 1Mbps / USB 序列号左右映射 / 相机设备节点（不发指令）
+  └─ quicdeploy live --run  LiveSession
+        ├─ Kinematics       IK 子进程（quest3 env 运行 third_party/ 中的 piper_differential_ik）+ FK/IK 自检
         ├─ InferenceWorker  spawn 子进程，GPU 加载 LVA FP16 模型
         ├─ PiperDualArm     2 个原生 MIT 子进程（can0/can1）+ 3 路相机读帧线程；连接即回初始位
         └─ 50Hz 控制环:
@@ -40,7 +40,7 @@ start_live.sh
 ## 目录结构 / Layout
 
 ```
-quicinfer/
+quicdeploy/
   common/      geometry(rot6d/decode/插值) · layout(向量排布) · io · validation
   config/      model.py 模型卡与产物哈希 · resolve.py 运行参数+硬件包+模型 → 一份完整配置
   policy/      base.py 适配器接口 · lva.py LVA FP16/FP32 + RTC · worker.py 推理子进程
@@ -54,9 +54,11 @@ configs/
   runtime.yaml               唯一的运行参数来源（模式、频率、队列、保护阈值……）
   models/*.json              模型卡：模型参数 + 产物 SHA-256
   hardware/piper_x/          hardware.yaml · robot.json · ik.yaml · initial_pose.json
+                             piper_bimanual.urdf（FK 与原生 IK 共用的双臂 URDF）
 scripts/  setup_env.sh · start_live.sh
 tests/    test_core.py（纯单元）· test_live_simulated.py（模拟机械臂端到端）
 tools/    compare_with_legacy.py（与旧实现逐项对比）
+third_party/piper_differential_ik/   部署专用差分 IK 扩展 .so + build_manifest.json（来源与源码哈希）
 outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl、report.json（git 忽略）
 ```
 
@@ -65,20 +67,22 @@ outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl�
 * `configs/runtime.yaml`：全部键必填、未知键报错（防止拼错参数被静默忽略）。
   旧版的 mode_defaults / local_overrides / profile overrides 三层覆盖在实际中都会被 YAML 显式值覆盖，
   这里直接简化为单文件。切换 sync 时需同时设 `prefetch_remaining_steps: 0`、`prefix_steps: 0`、`blend_s: 0.0`。
-* 模型选择：`runtime.yaml` 的 `model`，或命令行 `--model` / 环境变量 `QUICINFER_MODEL`。
+* 模型选择：`runtime.yaml` 的 `model`，或命令行 `--model` / 环境变量 `QUICDEPLOY_MODEL`。
 * 新增模型：写一份模型卡（参考现有 `configs/models/*.json` 的 `model` 段），然后
-  `.venv/bin/python -m quicinfer register-model configs/models/<new>.json` 冻结产物哈希。
-  新的模型结构：继承 `quicinfer.policy.base.PolicyAdapter`，在模型卡 `adapter` 写 `模块:类名`。
+  `.venv/bin/python -m quicdeploy register-model configs/models/<new>.json` 冻结产物哈希。
+  新的模型结构：继承 `quicdeploy.policy.base.PolicyAdapter`，在模型卡 `adapter` 写 `模块:类名`。
 
 ## 外部依赖 / External dependencies
 
-这些仍在原位置，由配置引用并做哈希/版本校验：
+双臂 URDF（旧链路中 FK 与 IK 各一份，内容逐字节相同）和 IK 扩展 `.so` 已迁入本项目，
+由 `hardware.yaml` 的 `artifacts` 锁定 SHA-256；启动时还会校验 `ik.yaml` 指向的 URDF 与 FK URDF 一致。
+以下仍在原位置，由配置引用并做哈希/版本校验：
 
 | 内容 | 位置 | 校验 |
 |---|---|---|
 | 上游 MIT 驱动 `vr_teleop` | `/home/ih/workspace/yihuigou/teleop_platform_xk` | git commit `5942fff…` 且相关目录无本地修改 |
 | quest3 Python（MIT 子进程 + IK 子进程） | `/home/ih/workspace/piper_pipeline/envs/quest3` | — |
-| IK 扩展 `.so`、两份 URDF | `hardware.yaml` 中列出 | SHA-256 |
+| quest3 env 中的 pinocchio/coal 等动态库（IK 扩展链接） | `.../envs/quest3/.../cmeel.prefix/lib` | — |
 | 模型权重 / 归一化 / 冻结源码 | `/home/ih/workspace/yihuigou/openarm_workspace/models/…` | 模型卡 SHA-256 |
 | torch 2.11.0+cu128 / numpy 2.2.6 | `setup_env.sh` 默认通过 `.pth` 复用 `openarm_workspace/.venv` | 适配器启动时严格比对版本 |
 
@@ -111,5 +115,5 @@ FK、IK 自检、50 步 IK 一致；GPU 推理（无前缀 / RTC 前缀）输出
   通常早于上一块最后一行，导致 sync 第二块大概率被调度器拒绝（模拟测试复现）。
 * 未迁移：旧的 `request_every_steps` 调度路径（当前所有配置都已是队列模式）、离线 `replay`、
   ACT 与 lva72 模型（旧版 `check-config` 已无法通过）、VR 实时预览发布。
-* 日志与临时目录改为 `outputs/`、`quicinfer-*` 前缀；MIT 子进程的 CAN 锁路径保持不变，
+* 日志与临时目录改为 `outputs/`、`quicdeploy-*` 前缀；MIT 子进程的 CAN 锁路径保持不变，
   以便继续与录制工具互斥。

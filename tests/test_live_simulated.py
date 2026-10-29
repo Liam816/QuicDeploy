@@ -14,15 +14,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from quicinfer.common.geometry import relative_prefix, to6
-from quicinfer.common.io import PROJECT_ROOT
-from quicinfer.common.layout import JOINT_COLUMNS
+from quicdeploy.common.geometry import relative_prefix, to6
+from quicdeploy.common.io import PROJECT_ROOT
+from quicdeploy.common.layout import JOINT_COLUMNS
 
 CONFIG = PROJECT_ROOT / "configs/runtime.yaml"
 
 
 def _config(**execution):
-    from quicinfer.config.resolve import resolve
+    from quicdeploy.config.resolve import resolve
 
     try:
         config = resolve(CONFIG)
@@ -156,8 +156,8 @@ class FakeControls:
 
 @pytest.fixture
 def patched(monkeypatch, tmp_path):
-    import quicinfer.runtime.live as live
-    from quicinfer.runtime.recorder import RunRecorder
+    import quicdeploy.runtime.live as live
+    from quicdeploy.runtime.recorder import RunRecorder
 
     FakeArm.instances.clear()
     monkeypatch.setattr(live, "PiperDualArm", FakeArm)

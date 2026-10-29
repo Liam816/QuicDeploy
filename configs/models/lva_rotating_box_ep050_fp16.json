@@ -14,7 +14,7 @@
   },
   "model": {
     "action_dt_s": 0.03333333333333333,
-    "adapter": "quicinfer.policy.lva:LVAActionGTFP16Adapter",
+    "adapter": "quicdeploy.policy.lva:LVAActionGTFP16Adapter",
     "architecture": "DINOv3 + FM",
     "cameras": [
       "left_wrist",

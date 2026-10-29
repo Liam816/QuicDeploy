@@ -146,17 +146,26 @@ def load_hardware(hardware_path, sources):
     sources[str(robot_path)] = sha256(robot_path)
     _keys(robot, {"robot"}, label="robot config")
     kinematics = deepcopy(hardware["kinematics"])
-    for key in ("urdf", "native_urdf", "yaml", "extension", "extension_dir", "python"):
-        if key in kinematics:
-            kinematics[key] = str(resolve_path(kinematics[key], hardware_path))
-    for key in ("urdf", "native_urdf", "yaml", "extension"):
-        if key in kinematics and not Path(kinematics[key]).is_file():
+    _keys(kinematics, {"urdf", "yaml", "extension", "python"}, {"solver_state_mode"}, label="hardware.kinematics")
+    for key in ("urdf", "yaml", "extension", "python"):
+        kinematics[key] = str(resolve_path(kinematics[key], hardware_path))
+    for key in ("urdf", "yaml", "extension"):
+        if not Path(kinematics[key]).is_file():
             raise ValueError(f"Missing hardware file: {kinematics[key]}")
+    # The IK worker imports the extension from its own directory.
+    # IK 子进程从扩展所在目录导入它。
+    kinematics["extension_dir"] = str(Path(kinematics["extension"]).parent)
     ik_parameters = load_yaml(kinematics["yaml"])
     sources[kinematics["yaml"]] = sha256(kinematics["yaml"])
+    # The native IK reads its URDF from ik.yaml; it must be the same geometry as FK.
+    # 原生 IK 从 ik.yaml 读取 URDF，必须与 FK 使用的几何完全一致。
+    kinematics["native_urdf"] = str(resolve_path(ik_parameters["model"]["urdf_path"], kinematics["yaml"]))
+    if not Path(kinematics["native_urdf"]).is_file():
+        raise ValueError(f"Missing IK URDF: {kinematics['native_urdf']}")
+    if sha256(kinematics["native_urdf"]) != sha256(kinematics["urdf"]):
+        raise ValueError("ik.yaml urdf_path differs from the FK URDF; FK and IK frames would disagree")
     for key in ("urdf", "native_urdf", "extension"):
-        if key in kinematics:
-            sources[kinematics[key]] = sha256(kinematics[key])
+        sources[kinematics[key]] = sha256(kinematics[key])
     if robot["robot"].get("log_dir"):
         robot["robot"]["log_dir"] = str(resolve_path(robot["robot"]["log_dir"], robot_path))
     initial = robot["robot"].get("initial_pose_file")

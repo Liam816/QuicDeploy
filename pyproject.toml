@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "quicinfer"
+name = "quicdeploy"
 version = "0.1.0"
 description = "Model inference driving real dual Piper-X arms / 模型推理驱动真实双臂 Piper-X"
 requires-python = ">=3.12,<3.13"
@@ -12,10 +12,10 @@ requires-python = ">=3.12,<3.13"
 dependencies = ["numpy", "scipy", "pyyaml", "opencv-python-headless", "torch"]
 
 [project.scripts]
-quicinfer = "quicinfer.cli:main"
+quicdeploy = "quicdeploy.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["quicinfer*"]
+include = ["quicdeploy*"]
 
 [tool.ruff]
 line-length = 120

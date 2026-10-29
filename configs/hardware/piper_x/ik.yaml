@@ -2,7 +2,9 @@
 # Encoder tracking error is logged; the deployment bundle may disable its abort limit.
 version: 1
 model:
-  urdf_path: /home/ih/workspace/yihuigou/teleop_platform_xk/src/vr_teleop/ik/piper/IK_version1.0/models/generated/piper_bimanual.urdf
+  # Relative to this file; must be byte-identical to hardware.yaml kinematics.urdf (checked).
+  # 相对本文件；必须与 hardware.yaml 的 kinematics.urdf 完全一致（启动时校验）。
+  urdf_path: piper_bimanual.urdf
   root_frame: arm_origin
   # Native API calls these tcp_frames; the controlled frames are the wrists.
   tcp_frames: [left_Link6, right_Link6]

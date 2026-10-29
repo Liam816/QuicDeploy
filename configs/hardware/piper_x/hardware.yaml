@@ -14,15 +14,16 @@ physical_contract:
   rotation: columns6d
 robot_config: robot.json
 kinematics:
-  # FK URDF used to build training anchors / 构造训练锚点用的 FK URDF
-  urdf: /home/ih/workspace/openarm/scripts/lerobot_dataset_viewer/piper_bimanual.urdf
-  # URDF consumed by the native IK solver (same content, pinned) / 原生 IK 使用的 URDF（内容相同）
-  native_urdf: /home/ih/workspace/yihuigou/teleop_platform_xk/src/vr_teleop/ik/piper/IK_version1.0/models/generated/piper_bimanual.urdf
+  # Dual-arm URDF: Python FK (model anchors, same as the training data) AND the
+  # native IK solver (via ik.yaml model.urdf_path) both use this one file.
+  # 双臂 URDF：Python FK（模型锚点，与训练数据同源）和原生 IK（经 ik.yaml 的 urdf_path）共用这一份。
+  urdf: piper_bimanual.urdf
   yaml: ik.yaml
-  # Deployment-only differential IK extension and the Python env it was built for.
-  # 仅用于部署的差分 IK 扩展，以及编译它所用的 Python 环境。
-  extension: /home/ih/workspace/openarm/outputs/deployment_ik/a98292e24fac8b99/piper_differential_ik.cpython-312-x86_64-linux-gnu.so
-  extension_dir: /home/ih/workspace/openarm/outputs/deployment_ik/a98292e24fac8b99
+  # Deployment-only differential IK extension (provenance: build_manifest.json next to it).
+  # It links pinocchio/coal from the quest3 env below, so it must run under that Python.
+  # 仅用于部署的差分 IK 扩展（来源见同目录 build_manifest.json）；
+  # 它链接下方 quest3 环境里的 pinocchio/coal 动态库，必须用该 Python 运行。
+  extension: ../../../third_party/piper_differential_ik/piper_differential_ik.cpython-312-x86_64-linux-gnu.so
   python: /home/ih/workspace/piper_pipeline/envs/quest3/bin/python
   # reference: integrate IK from the last accepted command (like teleop recording).
   # reference：从上一次接受的指令积分 IK（与遥操作录制一致）。
@@ -31,9 +32,8 @@ kinematics:
 can_adapter_serials:
   left: 003F00344148571320343133
   right: 003100265547571120343930
+# Pinned files (relative to this file): any change must be reviewed and re-pinned here.
+# 被锁定的文件（相对本文件）：任何改动都需审核后在此更新哈希。
 artifacts:
-  /home/ih/workspace/openarm/scripts/lerobot_dataset_viewer/piper_bimanual.urdf: b403c8b8fed2e191eef8dd4d30b7f0858da0f1e10187a2dc1ef6c77ca26c3f13
-  ? /home/ih/workspace/yihuigou/teleop_platform_xk/src/vr_teleop/ik/piper/IK_version1.0/models/generated/piper_bimanual.urdf
-  : b403c8b8fed2e191eef8dd4d30b7f0858da0f1e10187a2dc1ef6c77ca26c3f13
-  ? /home/ih/workspace/openarm/outputs/deployment_ik/a98292e24fac8b99/piper_differential_ik.cpython-312-x86_64-linux-gnu.so
-  : a98292e24fac8b99f333a906ddea51971571c7773dceef575f616d91ca2afe23
+  piper_bimanual.urdf: b403c8b8fed2e191eef8dd4d30b7f0858da0f1e10187a2dc1ef6c77ca26c3f13
+  ../../../third_party/piper_differential_ik/piper_differential_ik.cpython-312-x86_64-linux-gnu.so: a98292e24fac8b99f333a906ddea51971571c7773dceef575f616d91ca2afe23

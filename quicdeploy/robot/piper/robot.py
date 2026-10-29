@@ -3,7 +3,7 @@
 双臂 Piper-X 驱动：每条臂一个原生 MIT 子进程（native_worker.py），父进程只做调度与校验。
 
 Process layout / 进程结构:
-    parent (this file, QuicInfer env)
+    parent (this file, QuicDeploy env)
       ├─ cameras: 3 x OpenCVCamera reader threads / 三路相机读帧线程
       ├─ left  native_worker.py  (quest_python env, owns can0) / 左臂子进程
       └─ right native_worker.py  (quest_python env, owns can1) / 右臂子进程
@@ -93,7 +93,7 @@ class PiperDualArm:
             if self._startup_pose is not None:
                 # Shared dual-arm barrier directory for synchronized homing.
                 # 双臂同步回零使用的共享屏障目录。
-                self._startup_directory = tempfile.TemporaryDirectory(prefix="quicinfer-piper-init-")
+                self._startup_directory = tempfile.TemporaryDirectory(prefix="quicdeploy-piper-init-")
             for camera in self.cameras.values():
                 connect_camera(camera)
             if self._startup_pose is not None:
@@ -286,7 +286,7 @@ class PiperDualArm:
         """
         if not self._connected or self._startup_pose is None:
             raise RuntimeError("Homing requires connected workers and an explicit initial pose")
-        with tempfile.TemporaryDirectory(prefix="quicinfer-piper-episode-") as directory:
+        with tempfile.TemporaryDirectory(prefix="quicdeploy-piper-episode-") as directory:
             try:
                 if cancel():
                     self.close()

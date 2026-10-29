@@ -41,21 +41,33 @@ def same(a, b, atol=0.0):
 
 # ---------------------------------------------------------------------- config
 def compare_config(old_cfg, new_cfg):
-    from quicinfer.common.io import sha256
+    from quicdeploy.common.io import sha256
 
     for section in ("runtime", "observation", "execution", "postprocess", "guard", "hold",
-                    "motion_limits", "timing", "ik_parameters", "hardware_identity"):
+                    "motion_limits", "timing", "hardware_identity"):
         report(f"config.{section}", old_cfg[section] == new_cfg[section])
-    # ik.yaml was copied into the project: compare its content, not its path.
-    # ik.yaml 已复制进本项目：比较文件内容而不是路径。
+    # ik.yaml, both URDFs and the IK extension were copied into the project:
+    # compare file contents, not paths.
+    # ik.yaml、两份 URDF 与 IK 扩展已迁入本项目：比较文件内容而不是路径。
+    old_ik, new_ik = (dict(cfg["ik_parameters"], model=dict(cfg["ik_parameters"]["model"]))
+                      for cfg in (old_cfg, new_cfg))
+    old_urdf = sha256(old_ik["model"].pop("urdf_path"))
+    new_urdf = sha256(Path(new_cfg["kinematics"]["yaml"]).parent / new_ik["model"].pop("urdf_path"))
+    report("config.ik_parameters", old_urdf == new_urdf and old_ik == new_ik)
     old_kin, new_kin = dict(old_cfg["kinematics"]), dict(new_cfg["kinematics"])
-    same_yaml = sha256(old_kin.pop("yaml")) == sha256(new_kin.pop("yaml"))
-    report("config.kinematics", same_yaml and old_kin == new_kin)
+    # ik.yaml content is compared above (its urdf_path is intentionally relative now).
+    # ik.yaml 的内容已在上面比较（其 urdf_path 现在有意改为相对路径）。
+    old_kin.pop("yaml"), new_kin.pop("yaml")
+    files = ("urdf", "native_urdf", "extension")
+    same_files = all(sha256(old_kin.pop(key)) == sha256(new_kin.pop(key)) for key in files)
+    same_dir = new_kin.pop("extension_dir") == str(Path(new_cfg["kinematics"]["extension"]).parent)
+    old_kin.pop("extension_dir")
+    report("config.kinematics", same_files and same_dir and old_kin == new_kin)
     ignored = {"initial_pose_file", "log_dir", "quest_python"}  # relocated paths / 仅路径迁移
     old_robot = {k: v for k, v in old_cfg["robot"].items() if k not in ignored}
     new_robot = {k: v for k, v in new_cfg["robot"].items() if k not in ignored}
     report("config.robot", old_robot == new_robot)
-    ignored = {"adapter", "implementation_files"}  # adapter code moved into quicinfer / 适配器代码已迁入
+    ignored = {"adapter", "implementation_files"}  # adapter code moved into quicdeploy / 适配器代码已迁入
     old_model = {k: v for k, v in old_cfg["model"].items() if k not in ignored}
     new_model = {k: v for k, v in new_cfg["model"].items() if k not in ignored}
     report("config.model", old_model == new_model)
@@ -63,7 +75,7 @@ def compare_config(old_cfg, new_cfg):
 
 # ---------------------------------------------------------------------- scheduler
 def compare_scheduler(old_mod, new_mod, model, execution, postprocess, sample, label):
-    from quicinfer.common.geometry import relative_prefix
+    from quicdeploy.common.geometry import relative_prefix
 
     rng = np.random.default_rng(7)
     old = old_mod.QueuePolicyScheduler(model, execution, postprocess)
@@ -102,7 +114,7 @@ def compare_scheduler(old_mod, new_mod, model, execution, postprocess, sample, l
 
 # ---------------------------------------------------------------------- guard
 def compare_guard(old_cls, new_cls, settings):
-    from quicinfer.common.layout import JOINT_COLUMNS
+    from quicdeploy.common.layout import JOINT_COLUMNS
 
     rng = np.random.default_rng(11)
     ok = True
@@ -135,9 +147,9 @@ def compare_guard(old_cls, new_cls, settings):
 
 # ---------------------------------------------------------------------- kinematics
 def compare_kinematics(old_piper, old_cli, new_cfg, legacy_cfg):
-    from quicinfer.common.layout import JOINT_COLUMNS
-    from quicinfer.kinematics.ik import Kinematics
-    from quicinfer.kinematics.selfcheck import check_kinematics
+    from quicdeploy.common.layout import JOINT_COLUMNS
+    from quicdeploy.kinematics.ik import Kinematics
+    from quicdeploy.kinematics.selfcheck import check_kinematics
 
     with tempfile.TemporaryDirectory() as tmp:
         old_ik = old_piper.Kinematics(legacy_cfg["kinematics"], Path(tmp) / "old.log")
@@ -177,7 +189,7 @@ def compare_kinematics(old_piper, old_cli, new_cfg, legacy_cfg):
 def compare_inference(old_adapters, new_cfg, legacy_cfg, sample):
     import time
 
-    from quicinfer.policy.base import load_adapter
+    from quicdeploy.policy.base import load_adapter
 
     images = {name: sample["image_" + name] for name in new_cfg["model"]["cameras"]}
     observation = {"images": images, "eef_state": sample["anchor"], "timestamp": 0.0}
@@ -193,7 +205,7 @@ def compare_inference(old_adapters, new_cfg, legacy_cfg, sample):
         done = time.monotonic()
         diff = float(np.max(np.abs(a - b)))
         report(f"inference.{label}", np.array_equal(a, b),
-               f"(max |diff| {diff:.3e}; legacy {mid - started:.3f}s, quicinfer {done - mid:.3f}s)")
+               f"(max |diff| {diff:.3e}; legacy {mid - started:.3f}s, quicdeploy {done - mid:.3f}s)")
 
 
 def main():
@@ -211,9 +223,9 @@ def main():
     from lerobot.deployment import queue_timeline, unified_config
     from lerobot.deployment import piper as old_piper
 
-    from quicinfer.config.resolve import resolve
-    from quicinfer.planning import scheduler as new_sched
-    from quicinfer.robot.guard import CommandGuard
+    from quicdeploy.config.resolve import resolve
+    from quicdeploy.planning import scheduler as new_sched
+    from quicdeploy.robot.guard import CommandGuard
 
     legacy_cfg = unified_config.resolve(legacy / args.legacy_profile)
     new_cfg = resolve(args.config)

@@ -5,11 +5,11 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation
 
-from quicinfer.common.geometry import decode, interpolate_pose, relative_prefix, to6
-from quicinfer.planning.scheduler import PrefixWindowExpired, QueueScheduler
-from quicinfer.planning.trajectory import TimedTrajectory
-from quicinfer.robot.guard import CommandGuard
-from quicinfer.runtime.controls import TerminalControls
+from quicdeploy.common.geometry import decode, interpolate_pose, relative_prefix, to6
+from quicdeploy.planning.scheduler import PrefixWindowExpired, QueueScheduler
+from quicdeploy.planning.trajectory import TimedTrajectory
+from quicdeploy.robot.guard import CommandGuard
+from quicdeploy.runtime.controls import TerminalControls
 
 MODEL = {"first_target_offset_s": 1 / 30, "action_dt_s": 1 / 30, "horizon": 50, "protocol": "eef20_relative"}
 EXECUTION = {"mode": "async", "prefix_steps": 10, "policy_hz": 30, "n_action_steps": 40,

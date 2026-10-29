@@ -2,7 +2,7 @@
 """Isolated deployment IK worker. No robot, SDK or CAN import.
 
 隔离的部署 IK 子进程：不导入机器人 SDK、不接触 CAN。
-Run as a standalone script by quicinfer.kinematics.ik.Kinematics with the
+Run as a standalone script by quicdeploy.kinematics.ik.Kinematics with the
 Python env that owns the compiled `piper_differential_ik` extension.
 由 Kinematics 用编译了 piper_differential_ik 扩展的那个 Python 环境以独立脚本方式启动。
 
@@ -31,12 +31,16 @@ if getattr(native_ik, "deployment_api_version", None) != 1:
 temporary = None
 solver_yaml = config["yaml"]
 native = yaml.safe_load(Path(solver_yaml).read_text())
-if "control_dt_s" in config:
-    dt = float(config["control_dt_s"])
-    if not np.isfinite(dt) or not 0 < dt <= 0.05:
-        raise ValueError("Invalid control timestep")
-    native["ik"]["dt"] = dt
-    urdf = Path(native["model"]["urdf_path"])
+urdf = Path(native["model"]["urdf_path"])
+if "control_dt_s" in config or not urdf.is_absolute():
+    # Write a runtime copy: control-rate dt, and the URDF path made absolute
+    # (the native solver would otherwise resolve it against the cwd).
+    # 写一份运行时副本：dt 取控制频率，URDF 改为绝对路径（否则原生求解器会相对 cwd 解析）。
+    if "control_dt_s" in config:
+        dt = float(config["control_dt_s"])
+        if not np.isfinite(dt) or not 0 < dt <= 0.05:
+            raise ValueError("Invalid control timestep")
+        native["ik"]["dt"] = dt
     if not urdf.is_absolute():
         native["model"]["urdf_path"] = str((Path(solver_yaml).parent / urdf).resolve())
     temporary = tempfile.TemporaryDirectory(prefix="piper-ik-runtime-")

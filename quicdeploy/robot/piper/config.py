@@ -68,7 +68,7 @@ class PiperConfig:
     expected_reference_commit: str = "5942fff6f572adffbd6e0bc7c088e51493a568ab"
     quest_python: str = "/home/ih/workspace/piper_pipeline/envs/quest3/bin/python"
     initial_pose_file: str | None = None
-    log_dir: str = "/tmp/quicinfer-piper-native-logs"
+    log_dir: str = "/tmp/quicdeploy-piper-native-logs"
     cameras: dict[str, CameraConfig] = field(default_factory=dict)
     # Descriptive metadata only. / 仅作描述用的元数据。
     type: str = "bi_piper_native"

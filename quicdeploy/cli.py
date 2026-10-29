@@ -1,11 +1,11 @@
-"""QuicInfer command line. / QuicInfer 命令行入口。
+"""QuicDeploy command line. / QuicDeploy 命令行入口。
 
-    python -m quicinfer check          resolve + validate config, no hardware / 校验配置，不连硬件
-    python -m quicinfer show-config    print the resolved config / 打印完整解析后的配置
-    python -m quicinfer preflight      CAN / USB serial / camera presence, no commands / 硬件在位检查
-    python -m quicinfer infer          offline GPU inference on a recorded sample / 离线推理自测
-    python -m quicinfer live --run     REAL ROBOT: enable, home, run the policy / 真机：使能、回零、运行策略
-    python -m quicinfer register-model CARD   freeze model artifact hashes / 冻结模型产物哈希
+    python -m quicdeploy check          resolve + validate config, no hardware / 校验配置，不连硬件
+    python -m quicdeploy show-config    print the resolved config / 打印完整解析后的配置
+    python -m quicdeploy preflight      CAN / USB serial / camera presence, no commands / 硬件在位检查
+    python -m quicdeploy infer          offline GPU inference on a recorded sample / 离线推理自测
+    python -m quicdeploy live --run     REAL ROBOT: enable, home, run the policy / 真机：使能、回零、运行策略
+    python -m quicdeploy register-model CARD   freeze model artifact hashes / 冻结模型产物哈希
 """
 import argparse
 import json
@@ -64,7 +64,7 @@ def cmd_infer(config, args):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="quicinfer", description=__doc__,
+    parser = argparse.ArgumentParser(prog="quicdeploy", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="runtime YAML / 运行参数 YAML")
     parser.add_argument("--model", help="model card overriding the YAML 'model' entry / 覆盖 YAML 中的模型")

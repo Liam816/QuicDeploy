@@ -1,5 +1,5 @@
-# QuicInfer runtime parameters. Relative paths are relative to this file; restart to apply.
-# QuicInfer 运行参数。相对路径以本文件所在目录为基准；修改后重启生效。
+# QuicDeploy runtime parameters. Relative paths are relative to this file; restart to apply.
+# QuicDeploy 运行参数。相对路径以本文件所在目录为基准；修改后重启生效。
 # This file is the single source of truth: every key below is required (except
 # guard.gripper_binary_thresholds_mm) and unknown keys are rejected.
 # 本文件是唯一参数来源：除 guard.gripper_binary_thresholds_mm 外全部为必填项，未知键会被拒绝。

@@ -1,5 +1,5 @@
-"""QuicInfer: model inference driving real dual Piper-X arms.
-QuicInfer：模型推理驱动真实双臂 Piper-X 的部署框架。
+"""QuicDeploy: model inference driving real dual Piper-X arms.
+QuicDeploy：模型推理驱动真实双臂 Piper-X 的部署框架。
 
 Layers (each depends only on the ones above it) / 分层（只依赖上层）:
     common     geometry, layouts, IO, validators / 几何、向量排布、IO、校验

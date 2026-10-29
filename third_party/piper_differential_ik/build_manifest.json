@@ -1,0 +1,20 @@
+{
+  "extension": "/home/ih/workspace/openarm/outputs/deployment_ik/a98292e24fac8b99/piper_differential_ik.cpython-312-x86_64-linux-gnu.so",
+  "sha256": "a98292e24fac8b99f333a906ddea51971571c7773dceef575f616d91ca2afe23",
+  "source": "/home/ih/workspace/piper_pipeline/src/teleop_platform/src/vr_teleop/ik/piper/IK_version1.0",
+  "upstream": {
+    "bindings.cpp": "65b75dfec95b437526b5bb491e0b8638e180ef127d2356ba9d268e183c7d4819",
+    "tmc/CMakeLists.txt": "a3594996560b8f8207e1fa306c133693836c8cddf9d4e9efd33958557f43b7c9",
+    "tmc/include/tmc/config.hpp": "274c7282208f600f85454493e6d953a35856af51f9e17f54688587e034461429",
+    "tmc/include/tmc/ik.hpp": "f665fdbb45866effc9454757661e5c0f00ddfb6ceab64013b6bb72d1cf023627",
+    "tmc/include/tmc/model.hpp": "fac88f9eb2efc4fb8be08420162656747b1139abdf77f95d3bc1cd6bb826f761",
+    "tmc/include/tmc/session.hpp": "58c281539ae6986402db4ab7b700884c010b6bc4413f0316981557aaff5f29f8",
+    "tmc/include/tmc/timing.hpp": "5c6c4a13da0caee45aa34a600a0892d72da18e9635b18efae39e359bcf9e530f",
+    "tmc/include/tmc/types.hpp": "9418a3f1fb11d2b95459e3aec6e8371dd2268670c2183c2a9fd1bf151f0d9add",
+    "tmc/src/config.cpp": "d9040a545c467873b86ac41d419d3f8e25e3def3898bb86e893636713b4bc325",
+    "tmc/src/ik.cpp": "27d86650d14164830021e41d3e46121f48c87c4ae896ebb009d3072e69327d85",
+    "tmc/src/model.cpp": "e6a972a17506ee813b721e78bc7912b176a4e362172cdedef1abeb41685f8902",
+    "tmc/src/session.cpp": "c70f0a3fe5590d283be23c066c8c7a9d8c8213f3c06d74a6295fb2e79b3273e4"
+  },
+  "patch_sha256": "18cb573f454d62c0c321d6a6643674a062288f1f51319949f1e77cedc20af423"
+}
