@@ -1,0 +1,39 @@
+# Piper-X hardware identity, kinematics and pinned geometry/binaries.
+# Piper-X 硬件身份、运动学文件，以及被哈希锁定的几何/二进制文件。
+# Independent of the model; relative paths are relative to this file.
+# 与模型无关；相对路径以本文件为基准。
+schema_version: 1
+physical_contract:
+  protocol: eef20_relative
+  frame: world
+  ends:
+    left: left_Link6
+    right: right_Link6
+  position_unit: m
+  gripper_unit: mm
+  rotation: columns6d
+robot_config: robot.json
+kinematics:
+  # FK URDF used to build training anchors / 构造训练锚点用的 FK URDF
+  urdf: /home/ih/workspace/openarm/scripts/lerobot_dataset_viewer/piper_bimanual.urdf
+  # URDF consumed by the native IK solver (same content, pinned) / 原生 IK 使用的 URDF（内容相同）
+  native_urdf: /home/ih/workspace/yihuigou/teleop_platform_xk/src/vr_teleop/ik/piper/IK_version1.0/models/generated/piper_bimanual.urdf
+  yaml: ik.yaml
+  # Deployment-only differential IK extension and the Python env it was built for.
+  # 仅用于部署的差分 IK 扩展，以及编译它所用的 Python 环境。
+  extension: /home/ih/workspace/openarm/outputs/deployment_ik/a98292e24fac8b99/piper_differential_ik.cpython-312-x86_64-linux-gnu.so
+  extension_dir: /home/ih/workspace/openarm/outputs/deployment_ik/a98292e24fac8b99
+  python: /home/ih/workspace/piper_pipeline/envs/quest3/bin/python
+  # reference: integrate IK from the last accepted command (like teleop recording).
+  # reference：从上一次接受的指令积分 IK（与遥操作录制一致）。
+  solver_state_mode: reference
+# USB-CAN adapter serials that define left/right. / 定义左右臂的 USB-CAN 适配器序列号。
+can_adapter_serials:
+  left: 003F00344148571320343133
+  right: 003100265547571120343930
+artifacts:
+  /home/ih/workspace/openarm/scripts/lerobot_dataset_viewer/piper_bimanual.urdf: b403c8b8fed2e191eef8dd4d30b7f0858da0f1e10187a2dc1ef6c77ca26c3f13
+  ? /home/ih/workspace/yihuigou/teleop_platform_xk/src/vr_teleop/ik/piper/IK_version1.0/models/generated/piper_bimanual.urdf
+  : b403c8b8fed2e191eef8dd4d30b7f0858da0f1e10187a2dc1ef6c77ca26c3f13
+  ? /home/ih/workspace/openarm/outputs/deployment_ik/a98292e24fac8b99/piper_differential_ik.cpython-312-x86_64-linux-gnu.so
+  : a98292e24fac8b99f333a906ddea51971571c7773dceef575f616d91ca2afe23

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quicinfer"
+version = "0.1.0"
+description = "Model inference driving real dual Piper-X arms / 模型推理驱动真实双臂 Piper-X"
+requires-python = ">=3.12,<3.13"
+# Exact pins live in requirements.txt (torch needs the cu128 index).
+# 精确版本见 requirements.txt（torch 需要 cu128 索引）。
+dependencies = ["numpy", "scipy", "pyyaml", "opencv-python-headless", "torch"]
+
+[project.scripts]
+quicinfer = "quicinfer.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["quicinfer*"]
+
+[tool.ruff]
+line-length = 120

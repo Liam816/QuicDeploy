@@ -1,0 +1,115 @@
+# QuicInfer
+
+模型推理 → 驱动真实双臂 Piper-X 的独立部署项目。
+Model inference driving real dual Piper-X arms, extracted from
+`openarm_workspace_hp/examples/piper_deployment/start_runtime_live.sh`.
+
+原链路分散在 `lerobot.deployment.*`、`scripts/offline_policy_eval`、`lerobot.robots.bi_piper_native`、
+`lerobot.cameras`、`scripts/lerobot_dataset_viewer` 等多处；本项目只保留实机推理这一条链路，
+不依赖 `lerobot` 包，并与旧实现做了逐项数值对比（见「验证」）。
+
+## 快速开始 / Quick start
+
+```bash
+cd /home/ih/heping/projects/QuicInfer
+bash scripts/setup_env.sh                       # 创建 .venv（首次）
+bash scripts/start_live.sh --check              # 配置 + 模型完整性 + 硬件在位，不运动
+bash scripts/start_live.sh --run                # 使能双臂、回初始位、运行策略
+PIPER_DIAGNOSTICS=1 bash scripts/start_live.sh --run --duration 120   # 保存每次预测
+QUICINFER_MODEL=configs/models/lva_pick2box_ep057_fp16.json bash scripts/start_live.sh --run
+```
+
+运行时按键：`←` 平滑回初始位并暂停；`→` 从新观测恢复；`Ctrl+C` 停止。
+
+## 链路 / Pipeline
+
+```
+start_live.sh
+  ├─ quicinfer check       配置解析 + 模型产物哈希校验（不连硬件）
+  ├─ quicinfer preflight   CAN 1Mbps / USB 序列号左右映射 / 相机设备节点（不发指令）
+  └─ quicinfer live --run  LiveSession
+        ├─ Kinematics       IK 子进程（quest3 env 中的 piper_differential_ik）+ FK/IK 自检
+        ├─ InferenceWorker  spawn 子进程，GPU 加载 LVA FP16 模型
+        ├─ PiperDualArm     2 个原生 MIT 子进程（can0/can1）+ 3 路相机读帧线程；连接即回初始位
+        └─ 50Hz 控制环:
+             observer.sample → [到预取阈值? capture → scheduler.prepare(RTC 前缀) → worker.submit]
+             → worker.poll → scheduler.accept (U/E 轨迹) → scheduler.target(t+dt)
+             → ik.step → guard.apply → robot.send
+```
+
+## 目录结构 / Layout
+
+```
+quicinfer/
+  common/      geometry(rot6d/decode/插值) · layout(向量排布) · io · validation
+  config/      model.py 模型卡与产物哈希 · resolve.py 运行参数+硬件包+模型 → 一份完整配置
+  policy/      base.py 适配器接口 · lva.py LVA FP16/FP32 + RTC · worker.py 推理子进程
+  planning/    trajectory.py 带时间戳轨迹 · scheduler.py sync/async/RTC 动作队列
+  kinematics/  urdf.py FK · ik.py IK 客户端 · ik_worker.py IK 子进程 · selfcheck.py 启动自检
+  robot/       guard.py 关节指令保护
+    piper/     robot.py 双臂驱动 · native_worker.py/startup.py（原样迁移的 MIT 子进程）
+               camera.py 相机 · config.py · preflight.py
+  runtime/     live.py 实时会话 · observer.py 观测对齐 · safety.py · recorder.py · controls.py
+configs/
+  runtime.yaml               唯一的运行参数来源（模式、频率、队列、保护阈值……）
+  models/*.json              模型卡：模型参数 + 产物 SHA-256
+  hardware/piper_x/          hardware.yaml · robot.json · ik.yaml · initial_pose.json
+scripts/  setup_env.sh · start_live.sh
+tests/    test_core.py（纯单元）· test_live_simulated.py（模拟机械臂端到端）
+tools/    compare_with_legacy.py（与旧实现逐项对比）
+outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl、report.json（git 忽略）
+```
+
+## 配置 / Configuration
+
+* `configs/runtime.yaml`：全部键必填、未知键报错（防止拼错参数被静默忽略）。
+  旧版的 mode_defaults / local_overrides / profile overrides 三层覆盖在实际中都会被 YAML 显式值覆盖，
+  这里直接简化为单文件。切换 sync 时需同时设 `prefetch_remaining_steps: 0`、`prefix_steps: 0`、`blend_s: 0.0`。
+* 模型选择：`runtime.yaml` 的 `model`，或命令行 `--model` / 环境变量 `QUICINFER_MODEL`。
+* 新增模型：写一份模型卡（参考现有 `configs/models/*.json` 的 `model` 段），然后
+  `.venv/bin/python -m quicinfer register-model configs/models/<new>.json` 冻结产物哈希。
+  新的模型结构：继承 `quicinfer.policy.base.PolicyAdapter`，在模型卡 `adapter` 写 `模块:类名`。
+
+## 外部依赖 / External dependencies
+
+这些仍在原位置，由配置引用并做哈希/版本校验：
+
+| 内容 | 位置 | 校验 |
+|---|---|---|
+| 上游 MIT 驱动 `vr_teleop` | `/home/ih/workspace/yihuigou/teleop_platform_xk` | git commit `5942fff…` 且相关目录无本地修改 |
+| quest3 Python（MIT 子进程 + IK 子进程） | `/home/ih/workspace/piper_pipeline/envs/quest3` | — |
+| IK 扩展 `.so`、两份 URDF | `hardware.yaml` 中列出 | SHA-256 |
+| 模型权重 / 归一化 / 冻结源码 | `/home/ih/workspace/yihuigou/openarm_workspace/models/…` | 模型卡 SHA-256 |
+| torch 2.11.0+cu128 / numpy 2.2.6 | `setup_env.sh` 默认通过 `.pth` 复用 `openarm_workspace/.venv` | 适配器启动时严格比对版本 |
+
+服务器无法访问 PyPI / PyTorch 源，所以 `setup_env.sh` 默认复用已验证的运行时；有外网时可用
+`bash scripts/setup_env.sh --install` 按 `requirements.txt` 全新安装。
+
+## 安全机制 / Safety (与原实现一致)
+
+* 启动：配置/模型/硬件文件哈希校验 → 硬件在位检查 → FK/IK 一致性自检 → 与遥操作工具共用的
+  `/tmp/piper-vr-oneclick-<uid>.lock` 互斥锁、检测 Dora CAN follower 未运行。
+* 推理：首块（及 sync 每块）在静止状态下推理，推理后校验关节漂移、夹爪包络、画面变化。
+* 每块：手腕位移/旋转上限；RTC 前缀逐位校验；过期行丢弃。
+* 每拍：关节限位、关节速度、夹爪二值化/限幅；确认值与下发值必须一致；失败先保持再报错。
+* 超时：`late_policy: hold` 时节拍超时只保持并暂停，不补发；MIT 子进程目标超时自动原地保持。
+
+## 验证 / Verification
+
+```bash
+.venv/bin/python -m pytest -q tests
+.venv/bin/python tools/compare_with_legacy.py --sample <旧实机运行目录>/chunk_000003.npz
+```
+
+`compare_with_legacy.py` 对比结果（2026-10-29，本机）：配置各段一致；调度器 4 种模式
+（async+RTC / async 无前缀 / 超前补偿 / sync）U/E 轨迹与目标采样逐位一致；指令保护 900 条一致；
+FK、IK 自检、50 步 IK 一致；GPU 推理（无前缀 / RTC 前缀）输出逐位一致。
+
+## 与旧实现的差异 / Differences from legacy
+
+* **修复**：sync 模式下静止推理请求使用 `requested_at=now`。旧实现用头部帧时间，
+  通常早于上一块最后一行，导致 sync 第二块大概率被调度器拒绝（模拟测试复现）。
+* 未迁移：旧的 `request_every_steps` 调度路径（当前所有配置都已是队列模式）、离线 `replay`、
+  ACT 与 lva72 模型（旧版 `check-config` 已无法通过）、VR 实时预览发布。
+* 日志与临时目录改为 `outputs/`、`quicinfer-*` 前缀；MIT 子进程的 CAN 锁路径保持不变，
+  以便继续与录制工具互斥。

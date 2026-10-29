@@ -1,0 +1,56 @@
+{
+  "robot": {
+    "type": "bi_piper_native",
+    "id": "piperx_tech_quest3_20261021",
+    "calibration_dir": "/home/ih/workspace/openarm/calibration/piperx_tech_quest3_20261021",
+    "left_can": "can0",
+    "right_can": "can1",
+    "left_gripper_width_mm": 70,
+    "right_gripper_width_mm": 100,
+    "rate_hz": 50,
+    "max_deg_s": 250,
+    "max_acc_deg_s2": 700,
+    "startup_home_speed_deg_s": 20.0,
+    "startup_home_acc_deg_s2": 60.0,
+    "episode_home_speed_deg_s": 20.0,
+    "episode_home_acc_deg_s2": 60.0,
+    "startup_timeout_s": 150,
+    "initial_pose_file": "initial_pose.json",
+    "reference_dir": "/home/ih/workspace/yihuigou/teleop_platform_xk",
+    "expected_reference_commit": "5942fff6f572adffbd6e0bc7c088e51493a568ab",
+    "quest_python": "/home/ih/workspace/piper_pipeline/envs/quest3/bin/python",
+    "log_dir": "../../../outputs/native_logs",
+    "cameras": {
+      "left_wrist": {
+        "type": "opencv",
+        "index_or_path": "/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Dabai_DC1_CC1W56100S7-video-index0",
+        "width": 640,
+        "height": 480,
+        "fps": 30,
+        "fourcc": "MJPG",
+        "warmup_s": 5,
+        "backend": "V4L2"
+      },
+      "head": {
+        "type": "opencv",
+        "index_or_path": "/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Dabai_DC1_CC1W56101W7-video-index0",
+        "width": 640,
+        "height": 480,
+        "fps": 30,
+        "fourcc": "MJPG",
+        "warmup_s": 5,
+        "backend": "V4L2"
+      },
+      "right_wrist": {
+        "type": "opencv",
+        "index_or_path": "/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Dabai_DC1_CC1W56101DF-video-index0",
+        "width": 640,
+        "height": 480,
+        "fps": 30,
+        "fourcc": "MJPG",
+        "warmup_s": 5,
+        "backend": "V4L2"
+      }
+    }
+  }
+}

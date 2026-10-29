@@ -1,0 +1,107 @@
+{
+  "artifacts": {
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/deployment_manifest.json": "59d494c2d0fd9863e35cb5614358ae2b82ed9b1aa1d4b6c71ee3d2c3df6c7693",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/model.pt": "6baa904f803c5fe9308be0f9c540e8fd0692012874dfe08cbcf141e4046a48a4",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/normalization.json": "5cceb93d89d487713437c41d67fff40e714da25320ee59be999214d65db7caea",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/configs/pick2box_action_gt_full_50ep_1026.py": "6ed7ba170e7da4d0251862e404e1988b18956516f779741f198a2e76b0e0e972",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/scripts/eval/eval_model.py": "e0c77e080c03ba4e3e1aae7b5d477e5d5143b52580ca88c86e9ae78853ac2340",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/dataset.py": "cdbc806f73667e40412654cd14ad097c7a2634c28f4a84baca991f3420a03796",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/dinov3_vitl.py": "a3f2a3527558b9e1a6211c822af2633c5070c509db250d7dc90e4ce6b2bbd897",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/model.py": "49e7885649c58bb17f3ea601d1a3e162a0d0c05e2a76fc0b7ebdb1d939086bfb",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/model_checkpoint_compat.py": "aa63d0336ef986f6529eeecac8f994899d05e2bf2f4202c8f1db195fe406ed80",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/model_package.py": "e377bcbed186dd53f89e6ccec76989e7536a3518c92a30b6b78abee77d83b39f",
+    "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/run_config.py": "ecfe1dee80519837b1c9da0ce9b7f6a4f127b0d0ef096886b810ab70ca2c7b0e"
+  },
+  "model": {
+    "action_dt_s": 0.03333333333333333,
+    "adapter": "quicinfer.policy.lva:LVAActionGTFP16Adapter",
+    "architecture": "DINOv3 + FM",
+    "cameras": [
+      "left_wrist",
+      "head",
+      "right_wrist"
+    ],
+    "checkpoint_epoch": 50,
+    "checkpoint_sha256": "6baa904f803c5fe9308be0f9c540e8fd0692012874dfe08cbcf141e4046a48a4",
+    "cpu_threads": 4,
+    "dataset_split": "training_replay",
+    "demo": false,
+    "device": "cuda",
+    "ends": {
+      "left": "left_Link6",
+      "right": "right_Link6"
+    },
+    "export_metadata": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/deployment_manifest.json",
+    "first_target_offset_s": 0.03333333333333333,
+    "fixed_prefix_steps": 10,
+    "frame": "world",
+    "global_step": 51850,
+    "gripper_unit": "mm",
+    "guidance_scale": 0,
+    "horizon": 50,
+    "id": "lva_pick2box_1026_action_gt_ep050_step51850_fp16",
+    "implementation_files": [
+      "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/configs/pick2box_action_gt_full_50ep_1026.py",
+      "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/scripts/eval/eval_model.py",
+      "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/dataset.py",
+      "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/dinov3_vitl.py",
+      "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/model.py",
+      "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/model_checkpoint_compat.py",
+      "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/model_package.py",
+      "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src/run_config.py"
+    ],
+    "layerscale_dtype": "float32",
+    "name": "LVA Action-GT · Pick2Box 1026 · Epoch 50 · Step 51850 · FP16",
+    "noise_generator": "torch CPU Generator(seed*1000003 + episode*100003 + anchor_index)",
+    "noise_std": 1,
+    "normalization": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/normalization.json",
+    "num_steps": 10,
+    "output_domain": "physical",
+    "position_unit": "m",
+    "preproc_sha256": "00a57c033dc05f2279025b57974b45efd95b970534336cc3eed055fa7a4fc7f9",
+    "preprocessing": {
+      "color": "RGB",
+      "crop": [
+        16,
+        16,
+        448,
+        608
+      ],
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "resize": [
+        480,
+        640
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "protocol": "eef20_relative",
+    "rotation": "columns6d",
+    "runtime_versions": {
+      "numpy": "2.2.6",
+      "torch": "2.11.0+cu128"
+    },
+    "source_dir": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/source/src",
+    "supervision": "action",
+    "target_contract": {
+      "anchor_pose_source": "state",
+      "first_target_offset_steps": 1,
+      "pose_source": "action"
+    },
+    "timing_domain": "stored_recording_time",
+    "training_source_commit": "35685e3d2db79f452b377f9d0321f88e99c7ace2",
+    "uses_language": false,
+    "uses_state": false,
+    "weight_dtype": "float16",
+    "weights": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1026_ep050_step51850/model.pt",
+    "weights_variant": "model"
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "captured_at": "2026-10-26T14:35:26.946344+08:00",
+  "source": "passive CAN feedback; no commands sent",
+  "arms": {
+    "left": {
+      "can_hint": "can0",
+      "usb_interface": "3-2.1.1:1.0",
+      "usb_serial": "003F00344148571320343133",
+      "joints_deg": [
+        -28.125,
+        39.453,
+        -36.492,
+        32.268,
+        11.53,
+        -7.04
+      ],
+      "gripper_width_mm": 79.73,
+      "gripper_max_width_m": 0.07,
+      "initial_gripper_openness": 1.0
+    },
+    "right": {
+      "can_hint": "can1",
+      "usb_interface": "3-2.1.2:1.0",
+      "usb_serial": "003100265547571120343930",
+      "joints_deg": [
+        20.618,
+        40.034,
+        -33.004,
+        34.708,
+        0.0,
+        -3.02
+      ],
+      "gripper_width_mm": 101.9,
+      "gripper_max_width_m": 0.1,
+      "initial_gripper_openness": 1.0
+    }
+  },
+  "capture_note": "Joint posture captured passively. Keep configured fully-open gripper targets; observed widths exceed configured strokes and need separate verification."
+}
