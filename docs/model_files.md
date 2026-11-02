@@ -1,5 +1,7 @@
 # 模型文件实际依赖 / Model file audit
 
+本文记录旧三份 LVA 模型。新 QuicForge 包的组织和验证见 [QuicForge 部署](quicforge_deployment.md)。
+
 2026-11-02，在新的 `quic-deploy` conda 环境，对当前 3 个 LVA Action-GT FP16 模型逐个审计。
 区分模型卡校验、适配器加载、无前缀与 RTC 推理三个阶段；再用只含 4 个文件的临时目录重新推理，
 并禁止该进程访问原模型目录。三者的两种推理输出均与原目录逐位一致。

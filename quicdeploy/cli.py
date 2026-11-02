@@ -84,12 +84,13 @@ def main(argv=None):
     live.add_argument("--diagnostics", action="store_true", help="save every prediction as npz / 保存每次预测")
     register = sub.add_parser("register-model")
     register.add_argument("card")
+    register.add_argument("--relative", action="store_true", help="store portable card-relative artifact paths / 使用可迁移的相对路径")
     args = parser.parse_args(argv)
 
     if args.command == "register-model":
         from .config.model import register as register_model
 
-        card = register_model(args.card)
+        card = register_model(args.card, relative=args.relative)
         print(canonical({"registered": args.card, "artifacts": len(card["artifacts"])}))
         return
 

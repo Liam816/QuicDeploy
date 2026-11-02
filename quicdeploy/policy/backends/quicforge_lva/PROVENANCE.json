@@ -1,0 +1,25 @@
+{
+  "repository": "QuicForge",
+  "revision": "c17f4b0",
+  "snapshot_note": "Current source snapshot analyzed 2026-11-02; not a claim of a clean historical training checkout.",
+  "patch": "Only replace absolute QuicForge imports with relative imports; network computations unchanged.",
+  "original_directory": "src/quicforge/models/lva",
+  "files": {
+    "model.py": {
+      "original_sha256": "608af1afe23fd328c27a4000de9a251a4f4b605cf03e3fc18b3dcf1a008cac6d",
+      "vendored_sha256": "dcf2b11caa7d7be35425a09487dca09741edb68f89fdc9d0a84e88dad87d7ec1"
+    },
+    "decoder.py": {
+      "original_sha256": "8b44a5182275ba0f5d7288579dc9d393034517908e1f1b14f46552090db30ea3",
+      "vendored_sha256": "4b945dd90894179a8ef9f0bac5591168b4703f040461afa7c9b52416ee460afe"
+    },
+    "dinov3.py": {
+      "original_sha256": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+      "vendored_sha256": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee"
+    },
+    "task_ids.py": {
+      "original_sha256": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+      "vendored_sha256": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa"
+    }
+  }
+}

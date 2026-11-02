@@ -1,0 +1,117 @@
+{
+  "artifacts": {
+    "../../models/quicforge/pick_kun_once_e50_bs20/deployment_manifest.json": "8ddae9a1f0e74f70e25708ba1b4eb649854318f9c12fbbadb75288ad3e77b388",
+    "../../models/quicforge/pick_kun_once_e50_bs20/inference_config.json": "a81e9713bae7e36e0b6af91cd1c916441662633b12faf0501bbfc83b722b5dbc",
+    "../../models/quicforge/pick_kun_once_e50_bs20/model_config.json": "ea8f8d95c33fded10ad9406550e0d117145bda65309859cd4000008752a90c68",
+    "../../models/quicforge/pick_kun_once_e50_bs20/normalization.json": "e3832412969242cdef205aadd2d989de01e14c8b5e641048c42f9bcb4e7daf24",
+    "../../models/quicforge/pick_kun_once_e50_bs20/provenance/checkpoint.json": "ced368e2ecddf5453281d2314d2f23028a6304ec2823db27bcc44904a8a00b5c",
+    "../../models/quicforge/pick_kun_once_e50_bs20/provenance/conversion_meta.json": "3f2ff64a0835c1ca067a3ececde97172252b8daf8b1de55d5c17dd70e30b1b20",
+    "../../models/quicforge/pick_kun_once_e50_bs20/provenance/training_config.json": "8a508626aabe20fba677b1f432740cf6aa72cb5f9e90fbdfa930120a8d7e76a3",
+    "../../models/quicforge/pick_kun_once_e50_bs20/weights.pt": "9d140d643f04af82e36b4c9e2b336e13baf0e13bb7b5976b49b28fbb26c4ce81",
+    "../../quicdeploy/config/quicforge.py": "5cf089529bdabba37eb5b6dc20df8e6f07b4824c5a63366f35e9dcc3be0a6105",
+    "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "768ba0ef808022861f0d4d7b236d4f70d7325ea7e5f324df9bb5e599e8f5cdf1",
+    "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
+    "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "4b945dd90894179a8ef9f0bac5591168b4703f040461afa7c9b52416ee460afe",
+    "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+    "../../quicdeploy/policy/backends/quicforge_lva/model.py": "dcf2b11caa7d7be35425a09487dca09741edb68f89fdc9d0a84e88dad87d7ec1",
+    "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+    "../../quicdeploy/policy/lva.py": "3625273c083d27cb224f2e355efd8fac8f16d8c47fddd2dd6ae5584cdc2809fa",
+    "../../quicdeploy/policy/quicforge.py": "e79a0f9c01728025e0cd2a6b52ec57ce7239fcbd61f68d8fdc6fc161f5b65436"
+  },
+  "model": {
+    "action_dt_s": 0.03333333333333333,
+    "adapter": "quicdeploy.policy.quicforge:QuicForgeLVAAdapter",
+    "architecture": "DINOv3 + FM",
+    "artifact_dir": "../../models/quicforge/pick_kun_once_e50_bs20",
+    "artifact_format": "quicforge_lva_v1",
+    "cameras": [
+      "left_wrist",
+      "head",
+      "right_wrist"
+    ],
+    "checkpoint_epoch": 50,
+    "cpu_threads": 4,
+    "dataset_split": "training_replay",
+    "demo": false,
+    "device": "cuda",
+    "ends": {
+      "left": "left_Link6",
+      "right": "right_Link6"
+    },
+    "export_metadata": "../../models/quicforge/pick_kun_once_e50_bs20/deployment_manifest.json",
+    "first_target_offset_s": 0.03333333333333333,
+    "fixed_prefix_steps": 10,
+    "frame": "world",
+    "global_step": 43700,
+    "gripper_unit": "mm",
+    "guidance_scale": 0,
+    "horizon": 50,
+    "id": "quicforge_pick_kun_ep050_step43700_fp32",
+    "implementation_files": [
+      "../../models/quicforge/pick_kun_once_e50_bs20/inference_config.json",
+      "../../models/quicforge/pick_kun_once_e50_bs20/model_config.json",
+      "../../models/quicforge/pick_kun_once_e50_bs20/provenance/checkpoint.json",
+      "../../models/quicforge/pick_kun_once_e50_bs20/provenance/conversion_meta.json",
+      "../../models/quicforge/pick_kun_once_e50_bs20/provenance/training_config.json",
+      "../../quicdeploy/policy/backends/quicforge_lva/__init__.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/model.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/decoder.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json",
+      "../../quicdeploy/policy/quicforge.py",
+      "../../quicdeploy/policy/lva.py",
+      "../../quicdeploy/config/quicforge.py"
+    ],
+    "layerscale_dtype": "float32",
+    "name": "QuicForge Pick Kun Once · Epoch 50 · Step 43700 · FP32",
+    "noise_std": 1,
+    "normalization": "../../models/quicforge/pick_kun_once_e50_bs20/normalization.json",
+    "num_steps": 10,
+    "output_domain": "physical",
+    "position_unit": "m",
+    "preprocessing": {
+      "color": "RGB",
+      "crop": [
+        16,
+        16,
+        448,
+        608
+      ],
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "resize": [
+        480,
+        640
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "protocol": "eef20_relative",
+    "rotation": "columns6d",
+    "runtime_versions": {
+      "numpy": "2.2.6",
+      "torch": "2.11.0+cu128"
+    },
+    "supervision": "action",
+    "target_contract": {
+      "anchor_pose_source": "state",
+      "first_target_offset_steps": 1,
+      "pose_source": "action"
+    },
+    "timing_domain": "stored_recording_time",
+    "uses_language": false,
+    "uses_state": false,
+    "weight_dtype": "float32",
+    "weights": "../../models/quicforge/pick_kun_once_e50_bs20/weights.pt",
+    "weights_sha256": "9d140d643f04af82e36b4c9e2b336e13baf0e13bb7b5976b49b28fbb26c4ce81",
+    "weights_variant": "model"
+  },
+  "schema_version": 1
+}

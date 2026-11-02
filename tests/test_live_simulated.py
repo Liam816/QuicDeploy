@@ -21,11 +21,11 @@ from quicdeploy.common.layout import JOINT_COLUMNS
 CONFIG = PROJECT_ROOT / "configs/runtime.yaml"
 
 
-def _config(**execution):
+def _config(model_card=None, **execution):
     from quicdeploy.config.resolve import resolve
 
     try:
-        config = resolve(CONFIG)
+        config = resolve(CONFIG, model_card=model_card)
     except (FileNotFoundError, ValueError) as exc:
         pytest.skip(f"deployment files unavailable on this host: {exc}")
     if not Path(config["kinematics"]["python"]).exists():
@@ -171,9 +171,10 @@ def patched(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("mode", ["async_rtc", "sync"])
-def test_live_session_simulated(patched, mode):
+@pytest.mark.parametrize("model_card", [None, PROJECT_ROOT / "configs/models/quicforge_pick_kun_ep050_step43700_fp16.json"])
+def test_live_session_simulated(patched, mode, model_card):
     extra = {} if mode == "async_rtc" else dict(mode="sync", prefix_steps=0, prefetch_remaining_steps=0)
-    config = _config(**extra)
+    config = _config(model_card=model_card, **extra)
     result = patched.LiveSession(config, diagnostics=True, duration_s=4.0).run()
     arm = FakeArm.instances[-1]
     assert result["status"] == "paused" or result["status"] == "passed", result

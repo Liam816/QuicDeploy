@@ -1,2 +1,7 @@
 *.so binary
 *.urdf text eol=lf
+# Preserve hash-pinned upstream/reference bytes, including original whitespace.
+# 保留已锁定哈希的上游/参考源码原始字节，不因清理空白而改变来源身份。
+quicdeploy/policy/backends/quicforge_lva/decoder.py whitespace=-blank-at-eol
+tools/reference/quicforge_lva/decoder.py whitespace=-blank-at-eol
+tools/reference/quicforge_lva/reference_ops.py whitespace=-blank-at-eof

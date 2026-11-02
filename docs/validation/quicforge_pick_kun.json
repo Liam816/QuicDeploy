@@ -1,0 +1,46 @@
+{
+  "status": "passed",
+  "model": "quicforge_pick_kun_ep050_step43700",
+  "date": "2026-11-02",
+  "precision_cases": 12,
+  "physical_commands_sent": 0,
+  "reference_method": "Original QuicForge network and evaluator functions on deployment-local task recordings",
+  "runtime": {
+    "torch": "2.11.0+cu128",
+    "numpy": "2.2.6",
+    "device": "NVIDIA GeForce RTX 3060 Laptop GPU"
+  },
+  "weights_sha256": "9d140d643f04af82e36b4c9e2b336e13baf0e13bb7b5976b49b28fbb26c4ce81",
+  "thresholds": {
+    "fp32": {
+      "position_mm": 0.05,
+      "rotation_deg": 0.02,
+      "gripper_mm": 0.05
+    },
+    "fp16": {
+      "position_mm": 1.0,
+      "rotation_deg": 0.5,
+      "gripper_mm": 1.0
+    }
+  },
+  "fp32_bit_identical": true,
+  "fp16_max_errors": {
+    "position_mm": 0.22697987868315364,
+    "rotation_deg": 0.018932231926049505,
+    "gripper_mm": 0.10786707546147056
+  },
+  "fp16_latency_s": [
+    0.3818412299733609,
+    0.2537498150486499,
+    0.254249909077771,
+    0.24492430803366005,
+    0.26928665000014007,
+    0.24487913702614605
+  ],
+  "ik_guard_software_commands": 195,
+  "tests_passed": 26,
+  "legacy_regression": "ALL PASS; legacy GPU output bit-identical",
+  "scope": "3 local recorded frames, two prefix modes; ideal software IK sink, no physical robot acceptance",
+  "old_model_or_python_access": [],
+  "spawn_output_bit_identical": true
+}

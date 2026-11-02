@@ -158,6 +158,9 @@ def main():
     cards = args.card or sorted((PROJECT / "configs/models").glob("*.json"))
     reports = []
     for card in cards:
+        if json.loads(card.read_text())["model"].get("artifact_format") == "quicforge_lva_v1":
+            print(f"SKIP {card.name}: QuicForge bundles are covered by tools/validate_quicforge.py", flush=True)
+            continue
         result = audit_card(card.resolve(), args.sample.resolve())
         target = args.output / f"{card.stem}.json"
         target.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n")

@@ -205,6 +205,12 @@ def resolve(config_path, *, model_card=None):
     validate_runtime(settings, model, rtc_capable=model.get("fixed_prefix_steps", 0) > 0)
 
     hardware = load_hardware(resolve_path(raw["hardware"], path), sources)
+    if model.get("artifact_format") == "quicforge_lva_v1":
+        from .quicforge import load_bundle
+
+        conversion = load_bundle(model, verify_hashes=False)["conversion"]
+        if conversion["kinematics"].get("urdf_sha256") != sha256(hardware["kinematics"]["urdf"]):
+            raise ValueError("QuicForge training URDF differs from deployment kinematics")
     robot = hardware["robot"]
     if [robot["left_gripper_width_mm"], robot["right_gripper_width_mm"]] != settings["guard"]["gripper_widths_mm"]:
         raise ValueError("Robot and command guard gripper widths disagree")

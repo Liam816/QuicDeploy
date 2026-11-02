@@ -22,6 +22,10 @@ QUICDEPLOY_MODEL=configs/models/lva_pick2box_ep057_fp16.json bash scripts/start_
 
 运行时按键：`←` 平滑回初始位并暂停；`→` 从新观测恢复；`Ctrl+C` 停止。
 
+新接入 QuicForge pick_kun（epoch50 / step43700）：`bash scripts/start_quicforge.sh --check`。
+适配器、文件组织、FP32/FP16 卡和离线验证见 [QuicForge 部署](docs/quicforge_deployment.md)。
+新模型只通过该薄启动器或 `--model` 显式选择，共用 runtime.yaml，原默认模型不变。
+
 ## 链路 / Pipeline
 
 ```

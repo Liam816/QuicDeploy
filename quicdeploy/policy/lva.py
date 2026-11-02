@@ -41,6 +41,24 @@ class LVAAdapter(PolicyAdapter):
 
     # ------------------------------------------------------------------ load
     def load(self, config):
+        self._configure_runtime(config)
+        state = self.torch.load(config["weights"], map_location="cpu", weights_only=True, mmap=True)
+        cfg, weights = state["config"], state["model"]
+        if (state["epoch"], state["global_step"], state["weights_variant"]) != (
+            config["checkpoint_epoch"], config["global_step"], "model"
+        ):
+            raise ValueError("Checkpoint identity mismatch")
+        if cfg.get("use_advantage") is not False or cfg["max_delay"] != 10:
+            raise ValueError("Checkpoint training RTC/advantage contract mismatch")
+        if any(int(cfg[k]) != v for k, v in {
+            "emb_dim": 256, "time_dim": 32, "n_att_layer": 4, "n_context": 50, "out_dim": 20,
+        }.items()):
+            raise ValueError("Unexpected model architecture")
+
+        self._build_legacy_network(cfg, weights)
+        self._set_normalization(json.loads(Path(config["normalization"]).read_text()))
+
+    def _configure_runtime(self, config):
         import torch
 
         self.config, self.torch = config, torch
@@ -60,19 +78,9 @@ class LVAAdapter(PolicyAdapter):
         if (config["fixed_prefix_steps"], config["horizon"], config["num_steps"],
                 config["guidance_scale"], config["noise_std"], config["weights_variant"]) != (10, 50, 10, 0, 1, "model"):
             raise ValueError("Expected raw model / horizon50 / prefix10 / steps10 / guidance0 / noise1")
-        state = torch.load(config["weights"], map_location="cpu", weights_only=True, mmap=True)
-        cfg, weights = state["config"], state["model"]
-        if (state["epoch"], state["global_step"], state["weights_variant"]) != (
-            config["checkpoint_epoch"], config["global_step"], "model"
-        ):
-            raise ValueError("Checkpoint identity mismatch")
-        if cfg.get("use_advantage") is not False or cfg["max_delay"] != 10:
-            raise ValueError("Checkpoint training RTC/advantage contract mismatch")
-        if any(int(cfg[k]) != v for k, v in {
-            "emb_dim": 256, "time_dim": 32, "n_att_layer": 4, "n_context": 50, "out_dim": 20,
-        }.items()):
-            raise ValueError("Unexpected model architecture")
 
+    def _build_legacy_network(self, cfg, weights):
+        torch, config = self.torch, self.config
         # model.py does `import dinov3_vitl`; expose the frozen copy only while importing.
         # model.py 内部 import dinov3_vitl：导入期间临时挂上冻结版本，结束后还原。
         source = Path(config["source_dir"])
@@ -100,8 +108,9 @@ class LVAAdapter(PolicyAdapter):
             raise ValueError("Incomplete model state")
         self.model = model.to(config["device"]).eval().requires_grad_(False)
 
-        stats = json.loads(Path(config["normalization"]).read_text())
-        self.mean = np.asarray(stats["mean"], dtype=np.float64)
+    def _set_normalization(self, stats, mean_key="mean"):
+        """Paired 20D physical stats, kept float64. / 配套的 20 维物理统计，保持 float64。"""
+        self.mean = np.asarray(stats[mean_key], dtype=np.float64)
         self.std = np.asarray(stats["std"], dtype=np.float64)
         if (self.mean.shape != (20,) or self.std.shape != (20,)
                 or not np.isfinite([self.mean, self.std]).all() or np.any(self.std <= 0)):
@@ -181,7 +190,7 @@ class LVAAdapter(PolicyAdapter):
         return output
 
 
-class LVAFP16Adapter(LVAAdapter):
+class LVAHalfPrecisionMixin:
     _fp16 = True
 
     def load(self, config):
@@ -200,6 +209,10 @@ class LVAFP16Adapter(LVAAdapter):
                 restored += 1
         if restored != 48:
             raise ValueError(f"Unexpected DINO LayerScale module count: {restored}")
+
+
+class LVAFP16Adapter(LVAHalfPrecisionMixin, LVAAdapter):
+    """Shared FP16 execution with the legacy checkpoint loader. / 旧权重的共享 FP16 执行策略。"""
 
 
 def validate_action_contract(config, checkpoint, normalization):

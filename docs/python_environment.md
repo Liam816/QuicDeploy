@@ -85,3 +85,9 @@ IK `.so` 的 RUNPATH 也仍指向 quest3 的 cmeel 动态库目录。仅安装�
 * 检查和模拟过程中未使能、回零或运动真实机械臂。
 
 运行证据：`outputs/env/`；模型文件审计证据：`outputs/model_audit/`。
+
+## QuicForge 适配器
+
+新适配器只使用本环境已有的 PyTorch/NumPy，不安装完整 QuicForge、decord 或 torchvision。
+原生参考生成工具使用已有的开发环境读取本地录制数据；生成后数值对比、IK/保护验证都在 quic-deploy 中运行。
+详见 [QuicForge 部署](quicforge_deployment.md)。
