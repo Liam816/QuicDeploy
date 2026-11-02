@@ -22,6 +22,10 @@ QUICDEPLOY_MODEL=configs/models/lva_pick2box_ep057_fp16.json bash scripts/start_
 
 运行时按键：`←` 平滑回初始位并暂停；`→` 从新观测恢复；`Ctrl+C` 停止。
 
+Pick2Box 1027（epoch39 / step91377）专用配置：`configs/lva_pick2box_1027_ep039_fp16.yaml`。
+启动检查：`bash scripts/start_pick2box_1027.sh --check`；值守运行：`bash scripts/start_pick2box_1027.sh --run`。
+
+
 Rotating Box（epoch50 / step38000）专用配置：`configs/lva_rotating_box_ep050_fp16.yaml`。
 启动：`bash scripts/start_rotating_box.sh --check`；值守运行：`bash scripts/start_rotating_box.sh --run`。
 其 YAML 可独立调整此模型参数；专用启动器固定选用该配置，忽略遗留的模型/配置环境变量。
