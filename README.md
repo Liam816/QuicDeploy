@@ -12,7 +12,8 @@ Model inference driving real dual Piper-X arms, extracted from
 
 ```bash
 cd /home/ih/heping/projects/QuicDeploy
-bash scripts/setup_env.sh                       # 创建 .venv（首次）
+bash scripts/setup_env.sh                       # 创建 quic-deploy conda 环境（首次）
+conda activate quic-deploy
 bash scripts/start_live.sh --check              # 配置 + 模型完整性 + 硬件在位，不运动
 bash scripts/start_live.sh --run                # 使能双臂、回初始位、运行策略
 PIPER_DIAGNOSTICS=1 bash scripts/start_live.sh --run --duration 120   # 保存每次预测
@@ -57,7 +58,8 @@ configs/
                              piper_bimanual.urdf（FK 与原生 IK 共用的双臂 URDF）
 scripts/  setup_env.sh · start_live.sh
 tests/    test_core.py（纯单元）· test_live_simulated.py（模拟机械臂端到端）
-tools/    compare_with_legacy.py（与旧实现逐项对比）
+tools/    compare_with_legacy.py（与旧实现逐项对比）· audit_model_files.py（实际模型文件审计）
+docs/     python_environment.md · model_files.md
 third_party/piper_differential_ik/   部署专用差分 IK 扩展 .so + build_manifest.json（来源与源码哈希）
 outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl、report.json（git 忽略）
 ```
@@ -69,7 +71,7 @@ outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl�
   这里直接简化为单文件。切换 sync 时需同时设 `prefetch_remaining_steps: 0`、`prefix_steps: 0`、`blend_s: 0.0`。
 * 模型选择：`runtime.yaml` 的 `model`，或命令行 `--model` / 环境变量 `QUICDEPLOY_MODEL`。
 * 新增模型：写一份模型卡（参考现有 `configs/models/*.json` 的 `model` 段），然后
-  `.venv/bin/python -m quicdeploy register-model configs/models/<new>.json` 冻结产物哈希。
+  `python -m quicdeploy register-model configs/models/<new>.json` 冻结产物哈希。
   新的模型结构：继承 `quicdeploy.policy.base.PolicyAdapter`，在模型卡 `adapter` 写 `模块:类名`。
 
 ## 外部依赖 / External dependencies
@@ -84,10 +86,14 @@ outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl�
 | quest3 Python（MIT 子进程 + IK 子进程） | `/home/ih/workspace/piper_pipeline/envs/quest3` | — |
 | quest3 env 中的 pinocchio/coal 等动态库（IK 扩展链接） | `.../envs/quest3/.../cmeel.prefix/lib` | — |
 | 模型权重 / 归一化 / 冻结源码 | `/home/ih/workspace/yihuigou/openarm_workspace/models/…` | 模型卡 SHA-256 |
-| torch 2.11.0+cu128 / numpy 2.2.6 | `setup_env.sh` 默认通过 `.pth` 复用 `openarm_workspace/.venv` | 适配器启动时严格比对版本 |
+| torch 2.11.0+cu128 / numpy 2.2.6 | 独立 conda 环境 `quic-deploy` | 模型卡严格比对版本；完整依赖见 requirements.lock |
 
-服务器无法访问 PyPI / PyTorch 源，所以 `setup_env.sh` 默认复用已验证的运行时；有外网时可用
-`bash scripts/setup_env.sh --install` 按 `requirements.txt` 全新安装。
+主推理环境已独立安装，不再依赖旧项目的 `.venv`。详见 [Python 环境](docs/python_environment.md)。
+`bash scripts/setup_env.sh --offline --dev` 可利用本机缓存复现安装。
+硬件侧 quest3 环境因 NumPy/cmeel 版本要求不同，仍单独使用。
+
+三个模型的实际推理都只使用 4 个模型文件，但当前模型卡还会校验 6–7 个额外溯源文件。
+完整路径及最小包验证见 [模型文件审计](docs/model_files.md)。原模型文件未删除。
 
 ## 安全机制 / Safety (与原实现一致)
 
@@ -101,8 +107,9 @@ outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl�
 ## 验证 / Verification
 
 ```bash
-.venv/bin/python -m pytest -q tests
-.venv/bin/python tools/compare_with_legacy.py --sample <旧实机运行目录>/chunk_000003.npz
+python -m pytest -q tests
+# 可选：历史对比工具还会导入旧项目的数据转换模块，需要用旧环境运行
+/home/ih/workspace/yihuigou/openarm_workspace_hp/.venv/bin/python tools/compare_with_legacy.py --sample <旧实机运行目录>/chunk_000003.npz
 ```
 
 `compare_with_legacy.py` 对比结果（2026-10-29，本机）：配置各段一致；调度器 4 种模式

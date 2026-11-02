@@ -1,0 +1,11 @@
+name: quic-deploy
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12.13
+  - pip
+  - setuptools<82
+  - wheel
+# Conda supplies Python/build tools; scripts/setup_env.sh installs requirements.lock
+# (including the CUDA 12.8 torch wheel) and the project in editable mode.
+# conda 提供 Python/安装工具；setup_env.sh 继续安装 requirements.lock 和本项目。

@@ -1,3 +1,5 @@
+# Direct inference dependencies. Full transitive CUDA/runtime pins: requirements.lock.
+# 直接推理依赖；完整传递依赖和 CUDA 包版本见 requirements.lock。
 # Pinned to the versions the model cards were validated with (runtime_versions).
 # 与模型卡 runtime_versions 校验一致的固定版本。
 --extra-index-url https://download.pytorch.org/whl/cu128

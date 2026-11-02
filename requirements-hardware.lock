@@ -1,0 +1,27 @@
+# REFERENCE ONLY: separate quest3 hardware environment, NOT quic-deploy.
+# 硬件进程环境版本清单，不能与主推理环境混装（NumPy 版本冲突）。
+# Observed 2026-11-02; no environment installation is performed by this file.
+cmeel==0.61.0
+cmeel-assimp==6.0.5
+cmeel-boost==1.89.0
+cmeel-console-bridge==1.0.2.3
+cmeel-octomap==1.10.0
+cmeel-qhull==8.0.2.1
+cmeel-tinyxml2==10.0.0
+cmeel-urdfdom==4.0.1
+cmeel-zlib==1.3.2
+coal==3.0.2
+dora-rs==1.1.0
+eigenpy==3.12.0
+libcoal==3.0.2
+libpinocchio==3.8.0
+numpy==2.3.5
+packaging==26.3
+pin==3.8.0
+piper-sdk==0.6.1
+pyagxarm==1.0.0
+pyarrow==26.0.0
+python-can==4.6.1
+pyyaml==6.0.3
+typing-extensions==4.16.0
+wrapt==1.17.3

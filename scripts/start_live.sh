@@ -9,13 +9,17 @@
 #   QUICDEPLOY_CONFIG   runtime YAML (default configs/runtime.yaml) / 运行参数文件
 #   QUICDEPLOY_MODEL    model card overriding the YAML model / 覆盖 YAML 中模型的模型卡
 #   PIPER_DIAGNOSTICS  1 = save every prediction (npz), 0/unset = off / 1 保存每次预测
-#   PYTHON_BIN         interpreter (default .venv/bin/python) / Python 解释器
+#   PYTHON_BIN         interpreter (default quic-deploy conda env) / Python 解释器
 # Keys while running / 运行时按键: LEFT = smooth return + pause, RIGHT = resume, Ctrl+C = stop.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 export PYTHONDONTWRITEBYTECODE=1
-PYTHON_BIN="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
+source "$ROOT/scripts/conda_env.sh"
+if [[ -z "${PYTHON_BIN:-}" ]]; then
+  PYTHON_BIN="$(quicdeploy_env_prefix)/bin/python"
+fi
+[[ -x "$PYTHON_BIN" ]] || { echo "Missing Python: $PYTHON_BIN; run bash scripts/setup_env.sh" >&2; exit 1; }
 CONFIG="${QUICDEPLOY_CONFIG:-$ROOT/configs/runtime.yaml}"
 
 if [[ $# -lt 1 || ( "$1" != "--check" && "$1" != "--run" ) ]]; then

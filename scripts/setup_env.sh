@@ -1,30 +1,36 @@
 #!/usr/bin/env bash
-# Create the project venv (.venv). / 创建项目虚拟环境 .venv。
-#
-#   bash scripts/setup_env.sh            # reuse a validated runtime (default, offline) / 复用已验证的运行时（默认，离线）
-#   bash scripts/setup_env.sh --install  # fresh pinned install, needs PyPI + PyTorch index / 全新安装，需要外网
-#
-# Reuse mode links QUICDEPLOY_RUNTIME_SITE (the site-packages holding the exact
-# torch/numpy build named in the model cards' runtime_versions) via a .pth file.
-# 复用模式通过 .pth 链接 QUICDEPLOY_RUNTIME_SITE（包含模型卡 runtime_versions 指定的 torch/numpy）。
-#
-# The IK worker and native MIT workers do NOT use this env: they run under the
-# external envs in configs/hardware/piper_x (kinematics.python / quest_python).
-# IK 子进程与原生 MIT 子进程不使用本环境，而使用 configs/hardware/piper_x 中指定的外部 Python。
+# Independent conda inference environment. / 独立的 conda 推理环境。
+# bash scripts/setup_env.sh [--offline] [--dev]
+# Offline uses uv's cache + outputs/env/wheelhouse; no old environment is referenced.
+# 离线模式使用 uv 缓存和 outputs/env/wheelhouse，不引用旧项目环境。
+# Native MIT / IK workers retain their separately pinned quest3 environment.
+# 原生 MIT / IK 子进程仍使用单独锁定版本的 quest3 环境。
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
-BASE_PYTHON="${QUICDEPLOY_BASE_PYTHON:-/home/ih/miniforge3/envs/lerobot/bin/python}"
-RUNTIME_SITE="${QUICDEPLOY_RUNTIME_SITE:-/home/ih/workspace/yihuigou/openarm_workspace/.venv/lib/python3.12/site-packages}"
-
-if [[ "${1:-}" == "--install" ]]; then
-  uv venv --python 3.12 .venv
-  uv pip install --python .venv/bin/python --index-strategy unsafe-best-match -r requirements.txt
-else
-  [[ -d "$RUNTIME_SITE" ]] || { echo "Missing runtime site-packages: $RUNTIME_SITE" >&2; exit 1; }
-  uv venv --python "$BASE_PYTHON" .venv
-  SITE="$(.venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-  echo "import site; site.addsitedir('$RUNTIME_SITE')" > "$SITE/quicdeploy_runtime.pth"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+source "$ROOT/scripts/conda_env.sh"
+OFFLINE=(); LOCK=requirements.lock
+for arg in "$@"; do
+  case "$arg" in
+    --offline) OFFLINE=(--offline) ;;
+    --dev) LOCK=requirements-dev.lock ;;
+    *) echo "Usage: bash $0 [--offline] [--dev]" >&2; exit 2 ;;
+  esac
+done
+CONDA_BIN="$(quicdeploy_conda)"
+ENV_PREFIX="$(quicdeploy_env_prefix)"
+if [[ ! -x "$ENV_PREFIX/bin/python" ]]; then
+  if [[ ${#OFFLINE[@]} -gt 0 ]]; then
+    "$CONDA_BIN" create -y -p "$ENV_PREFIX" --offline --file conda-linux-64.lock
+  else
+    "$CONDA_BIN" create -y -p "$ENV_PREFIX" python=3.12.13 pip 'setuptools<82' wheel
+  fi
 fi
-uv pip install --python .venv/bin/python --no-deps --no-build-isolation --offline -e . \
-  || echo "$(pwd)" > "$(.venv/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/quicdeploy_src.pth"
-.venv/bin/python -c "import torch, numpy, quicdeploy; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), 'numpy', numpy.__version__, 'quicdeploy', quicdeploy.__file__)"
+"$ENV_PREFIX/bin/python" -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
+WHEELS=()
+[[ ! -d "$ROOT/outputs/env/wheelhouse" ]] || WHEELS=(--find-links "$ROOT/outputs/env/wheelhouse")
+uv pip install --python "$ENV_PREFIX/bin/python" "${OFFLINE[@]}" "${WHEELS[@]}" \
+  --index-strategy unsafe-best-match -r "$LOCK"
+uv pip install --python "$ENV_PREFIX/bin/python" --offline --no-deps --no-build-isolation -e .
+"$ENV_PREFIX/bin/python" -m pip check
+"$ENV_PREFIX/bin/python" -c "import torch,numpy,sys; print('Python:',sys.executable,'torch:',torch.__version__,'CUDA:',torch.cuda.is_available(),'numpy:',numpy.__version__)"

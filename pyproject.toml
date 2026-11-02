@@ -9,7 +9,14 @@ description = "Model inference driving real dual Piper-X arms / 模型推理驱�
 requires-python = ">=3.12,<3.13"
 # Exact pins live in requirements.txt (torch needs the cu128 index).
 # 精确版本见 requirements.txt（torch 需要 cu128 索引）。
-dependencies = ["numpy", "scipy", "pyyaml", "opencv-python-headless", "torch"]
+dependencies = [
+  "numpy==2.2.6", "scipy==1.17.1", "pyyaml==6.0.3",
+  "opencv-python-headless==4.13.0.92", "torch==2.11.0+cu128",
+  "safetensors==0.8.0", "pillow==12.3.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.4.2"]
 
 [project.scripts]
 quicdeploy = "quicdeploy.cli:main"

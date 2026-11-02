@@ -1,0 +1,6 @@
+# Test tools only; no test extras/plugins from the old project.
+-r requirements.lock
+iniconfig==2.3.1
+pluggy==1.7.0
+pygments==2.21.0
+pytest==8.4.2

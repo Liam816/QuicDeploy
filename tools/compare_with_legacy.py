@@ -2,9 +2,13 @@
 
 与旧版 openarm 部署代码逐项对比的回归工具（不会让机械臂运动）。
 
-    .venv/bin/python tools/compare_with_legacy.py \
+    /home/ih/workspace/yihuigou/openarm_workspace_hp/.venv/bin/python tools/compare_with_legacy.py \
         --legacy /home/ih/workspace/yihuigou/openarm_workspace_hp \
         --sample <legacy live run>/chunk_000003.npz [--skip-gpu] [--skip-ik]
+
+Optional developer tool: legacy imports need its av/pandas/pyarrow/lz4 packages.
+Run this tool under the legacy environment, not the minimal inference environment.
+可选开发工具：旧代码还导入 av/pandas/pyarrow/lz4；请用旧环境运行，勿把它们加入精简推理环境。
 
 Sections / 对比项:
     config     resolved runtime config vs legacy current.json profile / 解析后的配置
