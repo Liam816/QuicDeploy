@@ -1,0 +1,49 @@
+# Shared deployment policy. Profiles override only their own differences.
+# 公共部署策略；各模型配置只覆盖自身差异，未知字段一律报错。
+schema_version: 2
+hardware: hardware/piper_x/hardware.yaml
+
+execution:
+  mode: async
+  prefix_steps: 10                 # actual RTC prefix / 实际 RTC 前缀
+  control_hz: 50                   # IK + MIT / IK 与 MIT 控制频率
+  n_action_steps: 40               # selected rows, not model horizon / 每块选用行数
+  prefetch_remaining_steps: 15
+  handoff_margin_s: 0.011
+  max_inference_wait_s: 15.0
+  max_tick_lateness_s: 0.020
+  late_policy: hold
+# policy_hz follows model.action_dt_s; runtime defaults to CUDA / 4 CPU threads.
+# policy_hz 从模型步长推导；运行环境默认 CUDA、4 个 CPU 线程。
+
+postprocess:
+  blend_s: 0.1                     # delays default to zero / 延迟补偿默认关闭
+
+observation:
+  max_camera_age_ms: 100
+  max_camera_skew_ms: 50
+  max_joint_age_ms: 50
+
+guard:
+  # Command limits are explicit; gripper widths come from hardware.
+  # 指令保护阈值显式声明；夹爪宽度从硬件配置读取。
+  joint_limits_deg:
+    - [-154, 154]
+    - [-7, 186]
+    - [-177, 7]
+    - [-97, 97]
+    - [-97, 97]
+    - [-186, 186]
+  gripper_binary_thresholds_mm: [40, 75]
+  max_joint_speed_deg_s: 135
+  gripper_feedback_tolerance_mm: 0.5
+  # Extra gripper rate limit and tracking-error abort default to null (disabled).
+  # 额外夹爪限速和跟踪误差中止阈值默认 null（关闭）。
+
+hold:
+  max_hold_drift_deg: 1
+  max_hold_image_change: 0.04
+
+motion_limits:
+  max_chunk_displacement_m: 0.6
+  max_chunk_rotation_deg: 75

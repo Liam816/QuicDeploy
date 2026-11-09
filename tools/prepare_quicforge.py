@@ -14,7 +14,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 
 from quicdeploy.common.io import load_json, sha256
-from quicdeploy.config.model import PHYSICAL_CONTRACT, register
+from quicdeploy.config.model import PHYSICAL_CONTRACT, compact_card, register
 from quicdeploy.config.quicforge import CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET, validate_inputs
 
 
@@ -96,7 +96,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
                  "runtime_versions": {"torch": "2.11.0+cu128", "numpy": "2.2.6"},
                  "implementation_files": [relative(output / p) for p in sorted(FILES - {"weights.pt", "normalization.json"})]
                                          + [relative(p) for p in code]}
-        card_path.write_text(json.dumps({"schema_version": 1, "model": model}, indent=2, ensure_ascii=False) + "\n")
+        card_path.write_text(json.dumps(compact_card({"schema_version": 1, "model": model}), indent=2, ensure_ascii=False) + "\n")
         register(card_path, relative=True)
         print(card_path)
     return output

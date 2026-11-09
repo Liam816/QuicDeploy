@@ -19,6 +19,7 @@ import numpy as np
 from ..common.io import digest, load_json, load_yaml, resolve_path, sha256
 from ..common.validation import is_int, is_number, validate_gripper_binary_thresholds, validate_gripper_speed
 from .model import PHYSICAL_CONTRACT, load_model_card
+from .defaults import OPTIONAL_DEFAULTS
 
 MODES = ("sync", "async", "rtc")
 SECTION_KEYS = {
@@ -182,27 +183,59 @@ def load_hardware(hardware_path, sources):
     }
 
 
+def load_runtime_profile(path, sources, stack=()):
+    """Merge explicit parent files; relative references belong to their declaring file.
+    合并显式父配置；路径相对声明它的文件，循环继承立即报错。
+    """
+    path = Path(os.path.abspath(path))
+    identity = path.resolve()
+    if identity in stack:
+        raise ValueError(f"Runtime inheritance cycle: {path}")
+    raw = load_yaml(path)
+    sources[str(path)] = sha256(path)
+    version = raw.get("schema_version")
+    if version == 1:
+        _keys(raw, {"schema_version", "hardware", "model", *SECTION_KEYS}, label="runtime config")
+        for section, keys in SECTION_KEYS.items():
+            optional = OPTIONAL_KEYS.get(section, set())
+            _keys(raw[section], keys - optional, optional, label=section)
+    elif version == 2:
+        _keys(raw, {"schema_version"}, {"extends", "hardware", "model", *SECTION_KEYS}, label="runtime config")
+        for section, keys in SECTION_KEYS.items():
+            if section in raw:
+                _keys(raw[section], (), keys, label=section)
+    else:
+        raise ValueError("Unsupported runtime config version")
+    merged = {}
+    if "extends" in raw:
+        parent = resolve_path(raw["extends"], path)
+        merged = load_runtime_profile(parent, sources, (*stack, identity))
+    for key, value in raw.items():
+        if key in ("schema_version", "extends"):
+            continue
+        if key in ("hardware", "model"):
+            merged[key] = str(resolve_path(value, path))
+        elif key in SECTION_KEYS:
+            merged[key] = {**merged.get(key, {}), **deepcopy(value)}
+    return merged
+
+
 def resolve(config_path, *, model_card=None):
-    """Load and validate everything; `model_card` overrides the YAML `model` entry.
-    加载并校验全部配置；model_card 参数可覆盖 YAML 中的 model 选择。
+    """Resolve v1 full configs or v2 inherited profiles; never connect hardware.
+    解析 v1 完整配置或 v2 继承配置，全程不连接硬件。
     """
     path = Path(os.path.abspath(config_path))
     sources = {}
-    raw = load_yaml(path)
-    sources[str(path)] = sha256(path)
-    _keys(raw, {"schema_version", "hardware", "model", *SECTION_KEYS}, label="runtime config")
-    if raw["schema_version"] != 1:
-        raise ValueError("Unsupported runtime config version")
-    for section, keys in SECTION_KEYS.items():
-        optional = OPTIONAL_KEYS.get(section, set())
-        _keys(raw[section], keys - optional, optional, label=section)
-    settings = {section: deepcopy(raw[section]) for section in SECTION_KEYS}
+    raw = load_runtime_profile(path, sources)
+    if "hardware" not in raw or (not model_card and "model" not in raw):
+        raise ValueError("Runtime config requires hardware and model")
+    settings = {section: {**deepcopy(OPTIONAL_DEFAULTS.get(section, {})),
+                          **deepcopy(raw.get(section, {}))} for section in SECTION_KEYS}
 
     card_path = Path(os.path.abspath(model_card)) if model_card else resolve_path(raw["model"], path)
     card = load_model_card(card_path)
     sources[str(card_path)] = sha256(card_path)
     model = dict(card["model"], device=settings["runtime"]["device"], cpu_threads=settings["runtime"]["cpu_threads"])
-    validate_runtime(settings, model, rtc_capable=model.get("fixed_prefix_steps", 0) > 0)
 
     hardware = load_hardware(resolve_path(raw["hardware"], path), sources)
     if model.get("artifact_format") == "quicforge_lva_v1":
@@ -212,6 +245,13 @@ def resolve(config_path, *, model_card=None):
         if conversion["kinematics"].get("urdf_sha256") != sha256(hardware["kinematics"]["urdf"]):
             raise ValueError("QuicForge training URDF differs from deployment kinematics")
     robot = hardware["robot"]
+    # Derive absent values only: explicit disagreements must still fail validation.
+    # 只补缺省值；显式填写但不一致的配置仍然必须报错。
+    settings["execution"].setdefault("policy_hz", 1 / model["action_dt_s"])
+    settings["guard"].setdefault("gripper_widths_mm", [robot["left_gripper_width_mm"], robot["right_gripper_width_mm"]])
+    for section, keys in SECTION_KEYS.items():
+        _keys(settings[section], keys, label=section)
+    validate_runtime(settings, model, rtc_capable=model.get("fixed_prefix_steps", 0) > 0)
     if [robot["left_gripper_width_mm"], robot["right_gripper_width_mm"]] != settings["guard"]["gripper_widths_mm"]:
         raise ValueError("Robot and command guard gripper widths disagree")
 
@@ -226,6 +266,7 @@ def resolve(config_path, *, model_card=None):
         "schema_version": 1,
         "model_card": str(card_path),
         "model": model,
+        "metadata": deepcopy(card.get("metadata", {})),
         **hardware,
         **settings,
         "timing": {

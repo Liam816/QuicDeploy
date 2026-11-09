@@ -12,32 +12,34 @@
     "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_rotating_box_ep050_step38000/source/src/model_package.py": "e377bcbed186dd53f89e6ccec76989e7536a3518c92a30b6b78abee77d83b39f",
     "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_rotating_box_ep050_step38000/source/src/run_config.py": "ecfe1dee80519837b1c9da0ce9b7f6a4f127b0d0ef096886b810ab70ca2c7b0e"
   },
+  "metadata": {
+    "architecture": "DINOv3 + FM",
+    "checkpoint": {
+      "epoch": 50,
+      "global_step": 38000
+    },
+    "dataset_split": "training_replay",
+    "demo": false,
+    "name": "LVA Action-GT · Rotating Box · Epoch 50 · Step 38000 · FP16",
+    "noise_generator": "torch CPU Generator(seed*1000003 + episode*100003 + anchor_index)",
+    "training_source_commit": "35685e3d2db79f452b377f9d0321f88e99c7ace2"
+  },
   "model": {
     "action_dt_s": 0.03333333333333333,
     "adapter": "quicdeploy.policy.lva:LVAActionGTFP16Adapter",
-    "architecture": "DINOv3 + FM",
     "cameras": [
       "left_wrist",
       "head",
       "right_wrist"
     ],
-    "checkpoint_epoch": 50,
-    "checkpoint_sha256": "746915d55ea523280a921be66283b019dc51878f607caafaaf3d1596d1322765",
-    "cpu_threads": 4,
-    "dataset_split": "training_replay",
-    "demo": false,
-    "device": "cuda",
     "ends": {
       "left": "left_Link6",
       "right": "right_Link6"
     },
     "export_metadata": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_rotating_box_ep050_step38000/deployment_manifest.json",
-    "first_target_offset_s": 0.03333333333333333,
     "fixed_prefix_steps": 10,
     "frame": "world",
-    "global_step": 38000,
     "gripper_unit": "mm",
-    "guidance_scale": 0,
     "horizon": 50,
     "id": "lva_rotating_box_action_gt_ep050_step38000_fp16",
     "implementation_files": [
@@ -50,17 +52,11 @@
       "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_rotating_box_ep050_step38000/source/src/model_package.py",
       "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_rotating_box_ep050_step38000/source/src/run_config.py"
     ],
-    "layerscale_dtype": "float32",
-    "name": "LVA Action-GT · Rotating Box · Epoch 50 · Step 38000 · FP16",
-    "noise_generator": "torch CPU Generator(seed*1000003 + episode*100003 + anchor_index)",
-    "noise_std": 1,
     "normalization": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_rotating_box_ep050_step38000/normalization.json",
-    "num_steps": 10,
     "output_domain": "physical",
     "position_unit": "m",
     "preproc_sha256": "1310438ef1d27b65a77f6e660a31ce6b2adf68af6b7ac346363f7de3ff21b931",
     "preprocessing": {
-      "color": "RGB",
       "crop": [
         16,
         16,
@@ -71,10 +67,6 @@
         0.485,
         0.456,
         0.406
-      ],
-      "resize": [
-        480,
-        640
       ],
       "std": [
         0.229,
@@ -96,12 +88,7 @@
       "pose_source": "action"
     },
     "timing_domain": "stored_recording_time",
-    "training_source_commit": "35685e3d2db79f452b377f9d0321f88e99c7ace2",
-    "uses_language": false,
-    "uses_state": false,
-    "weight_dtype": "float16",
-    "weights": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_rotating_box_ep050_step38000/model.pt",
-    "weights_variant": "model"
+    "weights": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_rotating_box_ep050_step38000/model.pt"
   },
-  "schema_version": 1
+  "schema_version": 2
 }

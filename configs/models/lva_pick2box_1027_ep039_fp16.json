@@ -12,32 +12,34 @@
     "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1027_ep039_step91377/source/src/model_package.py": "e377bcbed186dd53f89e6ccec76989e7536a3518c92a30b6b78abee77d83b39f",
     "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1027_ep039_step91377/source/src/run_config.py": "ecfe1dee80519837b1c9da0ce9b7f6a4f127b0d0ef096886b810ab70ca2c7b0e"
   },
+  "metadata": {
+    "architecture": "DINOv3 + FM",
+    "checkpoint": {
+      "epoch": 39,
+      "global_step": 91377
+    },
+    "dataset_split": "training_replay",
+    "demo": false,
+    "name": "LVA Action-GT · Pick2Box 1027 · Epoch 39 · Step 91377 · FP16",
+    "noise_generator": "torch CPU Generator(seed*1000003 + episode*100003 + anchor_index)",
+    "training_source_commit": "b2cdedab7bd34434f1e9d5002724917343d925c4"
+  },
   "model": {
     "action_dt_s": 0.03333333333333333,
     "adapter": "quicdeploy.policy.lva:LVAActionGTFP16Adapter",
-    "architecture": "DINOv3 + FM",
     "cameras": [
       "left_wrist",
       "head",
       "right_wrist"
     ],
-    "checkpoint_epoch": 39,
-    "checkpoint_sha256": "4df9d510b3400f4f97b4a4d17e1581ea730eb5470e6d9e263fe861d45a63907e",
-    "cpu_threads": 4,
-    "dataset_split": "training_replay",
-    "demo": false,
-    "device": "cuda",
     "ends": {
       "left": "left_Link6",
       "right": "right_Link6"
     },
     "export_metadata": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1027_ep039_step91377/deployment_manifest.json",
-    "first_target_offset_s": 0.03333333333333333,
     "fixed_prefix_steps": 10,
     "frame": "world",
-    "global_step": 91377,
     "gripper_unit": "mm",
-    "guidance_scale": 0,
     "horizon": 50,
     "id": "lva_pick2box_1027_action_gt_ep039_step91377_fp16",
     "implementation_files": [
@@ -50,17 +52,11 @@
       "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1027_ep039_step91377/source/src/model_package.py",
       "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1027_ep039_step91377/source/src/run_config.py"
     ],
-    "layerscale_dtype": "float32",
-    "name": "LVA Action-GT · Pick2Box 1027 · Epoch 39 · Step 91377 · FP16",
-    "noise_generator": "torch CPU Generator(seed*1000003 + episode*100003 + anchor_index)",
-    "noise_std": 1,
     "normalization": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1027_ep039_step91377/normalization.json",
-    "num_steps": 10,
     "output_domain": "physical",
     "position_unit": "m",
     "preproc_sha256": "3acd3359c4cc350b68fe283b198f7a2ddbf3c983b8a9dfa3d560e018139875db",
     "preprocessing": {
-      "color": "RGB",
       "crop": [
         16,
         16,
@@ -71,10 +67,6 @@
         0.485,
         0.456,
         0.406
-      ],
-      "resize": [
-        480,
-        640
       ],
       "std": [
         0.229,
@@ -96,12 +88,7 @@
       "pose_source": "action"
     },
     "timing_domain": "stored_recording_time",
-    "training_source_commit": "b2cdedab7bd34434f1e9d5002724917343d925c4",
-    "uses_language": false,
-    "uses_state": false,
-    "weight_dtype": "float16",
-    "weights": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1027_ep039_step91377/model.pt",
-    "weights_variant": "model"
+    "weights": "/home/ih/workspace/yihuigou/openarm_workspace/models/lva_pick2box_1027_ep039_step91377/model.pt"
   },
-  "schema_version": 1
+  "schema_version": 2
 }

@@ -186,3 +186,50 @@ def test_resolve_rejects_training_deployment_urdf_mismatch(bundle, tmp_path, mon
     card = tmp_path / "card.json"; card.write_text("{}")
     with pytest.raises(ValueError, match="training URDF differs"):
         resolver.resolve(PROJECT_ROOT / "configs/runtime.yaml", model_card=card)
+
+
+def test_v2_card_roundtrip_preserves_contract_and_artifact_pins(bundle, tmp_path):
+    from quicdeploy.config.model import compact_card, expand_model
+    config, _, _ = bundle
+    config.update(dataset_split="training_replay", training_source_commit="source-commit")
+    # This fixture uses one CPU thread; runtime-owned values are deliberately absent in v2 cards.
+    card = compact_card({"schema_version": 1, "model": config})
+    expanded = expand_model(card)
+    for key, value in config.items():
+        if key not in {"device", "cpu_threads", "name", "architecture", "demo", "dataset_split", "training_source_commit"}:
+            assert expanded[key] == value
+    assert card["metadata"]["checkpoint"] == {"epoch": 50, "global_step": 43700}
+    assert card["metadata"]["training_source_commit"] == "source-commit"
+    assert not {"num_steps", "guidance_scale", "noise_std", "weight_dtype", "first_target_offset_s",
+                "device", "cpu_threads", "checkpoint_epoch", "global_step"} & card["model"].keys()
+    owner = tmp_path / "v2.json"; write(owner, card)
+    registered = register(owner, relative=True)
+    loaded = load_model_card(owner)
+    assert registered["schema_version"] == 2
+    assert loaded["metadata"] == card["metadata"]
+    assert loaded["model"]["weights_sha256"] == config["weights_sha256"]
+    assert loaded["model"]["checkpoint_epoch"] == 50
+    assert compact_card(registered) == registered
+
+
+@pytest.mark.parametrize("change,match", [
+    ("typo", "Unknown v2 model"),
+    ("checkpoint", "global_step"),
+    ("identity", "card.global_step"),
+    ("precision", "weight_dtype"),
+    ("sampling", "num_steps"),
+    ("preprocessing", "not conversion switches"),
+])
+def test_v2_expansion_does_not_hide_invalid_contracts(bundle, tmp_path, change, match):
+    from quicdeploy.config.model import compact_card
+    config, _, _ = bundle
+    card = compact_card({"schema_version": 1, "model": config})
+    if change == "typo": card["model"]["num_step"] = 10
+    if change == "checkpoint": del card["metadata"]["checkpoint"]["global_step"]
+    if change == "identity": card["metadata"]["checkpoint"]["global_step"] = 1
+    if change == "precision": card["model"]["weight_dtype"] = "float16"
+    if change == "sampling": card["model"]["num_steps"] = 20
+    if change == "preprocessing": card["model"]["preprocessing"]["color"] = "BGR"
+    owner = tmp_path / "invalid.json"; write(owner, card)
+    with pytest.raises(ValueError, match=match):
+        register(owner)

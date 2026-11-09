@@ -65,8 +65,9 @@ quicdeploy/
                camera.py 相机 · config.py · preflight.py
   runtime/     live.py 实时会话 · observer.py 观测对齐 · safety.py · recorder.py · controls.py
 configs/
-  runtime.yaml               唯一的运行参数来源（模式、频率、队列、保护阈值……）
-  models/*.json              模型卡：模型参数 + 产物 SHA-256
+  defaults.yaml              公共策略和显式保护阈值
+  runtime.yaml / lva_*.yaml   模型选择 + 按需参数覆盖
+  models/*.json              模型契约 + metadata 溯源 + 产物 SHA-256
   hardware/piper_x/          hardware.yaml · robot.json · ik.yaml · initial_pose.json
                              piper_bimanual.urdf（FK 与原生 IK 共用的双臂 URDF）
 scripts/  setup_env.sh · start_live.sh
@@ -79,9 +80,13 @@ outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl�
 
 ## 配置 / Configuration
 
-* `configs/runtime.yaml`：全部键必填、未知键报错（防止拼错参数被静默忽略）。
-  旧版的 mode_defaults / local_overrides / profile overrides 三层覆盖在实际中都会被 YAML 显式值覆盖，
-  这里直接简化为单文件。切换 sync 时需同时设 `prefetch_remaining_steps: 0`、`prefix_steps: 0`、`blend_s: 0.0`。
+* v2 运行配置通过 `extends: defaults.yaml` 继承公共策略，仅填写模型选择和差异；相对路径归声明文件所有。
+  未知字段、循环继承和缺失保护阈值仍报错；旧 v1 完整配置继续支持。
+* `policy_hz` 缺省从模型步长推导，夹爪宽度缺省从硬件读取；显式不一致仍报错。
+  切换 sync 时需同时设 `prefetch_remaining_steps: 0`、`prefix_steps: 0`、`blend_s: 0.0`。
+* v2 模型卡将名称、训练来源等放入 `metadata`；checkpoint 轮次/步数仍参与加载身份校验。
+  固定采样参数、精度和首目标偏移按适配器/训练契约展开；权重、归一化和产物哈希仍逐项校验。
+  规则、默认值和覆盖示例见 [配置说明](docs/configuration.md)。
 * 模型选择：`runtime.yaml` 的 `model`，或命令行 `--model` / 环境变量 `QUICDEPLOY_MODEL`。
 * 新增模型：写一份模型卡（参考现有 `configs/models/*.json` 的 `model` 段），然后
   `python -m quicdeploy register-model configs/models/<new>.json` 冻结产物哈希。

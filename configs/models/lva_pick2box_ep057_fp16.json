@@ -11,32 +11,33 @@
     "/home/ih/workspace/piper_pipeline/models/pick2box_action_gt_best_20261022_190909/source/src/model_checkpoint_compat.py": "aa63d0336ef986f6529eeecac8f994899d05e2bf2f4202c8f1db195fe406ed80",
     "/home/ih/workspace/piper_pipeline/models/pick2box_action_gt_best_20261022_190909/source/src/run_config.py": "ecfe1dee80519837b1c9da0ce9b7f6a4f127b0d0ef096886b810ab70ca2c7b0e"
   },
+  "metadata": {
+    "architecture": "DINOv3 + FM",
+    "checkpoint": {
+      "epoch": 57,
+      "global_step": 95703
+    },
+    "dataset_split": "training_replay",
+    "demo": false,
+    "name": "LVA Action-GT · Pick2Box · Epoch 57 · Step 95703 · FP16",
+    "noise_generator": "torch CPU Generator(seed*1000003 + episode*100003 + anchor_index)"
+  },
   "model": {
     "action_dt_s": 0.03333333333333333,
     "adapter": "quicdeploy.policy.lva:LVAActionGTFP16Adapter",
-    "architecture": "DINOv3 + FM",
     "cameras": [
       "left_wrist",
       "head",
       "right_wrist"
     ],
-    "checkpoint_epoch": 57,
-    "checkpoint_sha256": "66c48a12d74347467b9ebfa8e04eb865895b845097f758177b7e231491f15e1a",
-    "cpu_threads": 4,
-    "dataset_split": "training_replay",
-    "demo": false,
-    "device": "cuda",
     "ends": {
       "left": "left_Link6",
       "right": "right_Link6"
     },
     "export_metadata": "/home/ih/workspace/openarm/models/pick2box_action_gt_36datasets_best_ep057/deployment_manifest.json",
-    "first_target_offset_s": 0.03333333333333333,
     "fixed_prefix_steps": 10,
     "frame": "world",
-    "global_step": 95703,
     "gripper_unit": "mm",
-    "guidance_scale": 0,
     "horizon": 50,
     "id": "lva_pick2box_action_gt_36datasets_ep057_step95703_fp16",
     "implementation_files": [
@@ -48,17 +49,11 @@
       "/home/ih/workspace/piper_pipeline/models/pick2box_action_gt_best_20261022_190909/source/src/model_checkpoint_compat.py",
       "/home/ih/workspace/piper_pipeline/models/pick2box_action_gt_best_20261022_190909/source/src/run_config.py"
     ],
-    "layerscale_dtype": "float32",
-    "name": "LVA Action-GT · Pick2Box · Epoch 57 · Step 95703 · FP16",
-    "noise_generator": "torch CPU Generator(seed*1000003 + episode*100003 + anchor_index)",
-    "noise_std": 1,
     "normalization": "/home/ih/workspace/openarm/models/pick2box_action_gt_36datasets_best_ep057/normalization.json",
-    "num_steps": 10,
     "output_domain": "physical",
     "position_unit": "m",
     "preproc_sha256": "ad6ee7d0d102415596564195578eab5f2334a24d87043d137bd90dbe6352c5cc",
     "preprocessing": {
-      "color": "RGB",
       "crop": [
         16,
         16,
@@ -69,10 +64,6 @@
         0.485,
         0.456,
         0.406
-      ],
-      "resize": [
-        480,
-        640
       ],
       "std": [
         0.229,
@@ -94,11 +85,7 @@
       "pose_source": "action"
     },
     "timing_domain": "stored_recording_time",
-    "uses_language": false,
-    "uses_state": false,
-    "weight_dtype": "float16",
-    "weights": "/home/ih/workspace/openarm/models/pick2box_action_gt_36datasets_best_ep057/model.pt",
-    "weights_variant": "model"
+    "weights": "/home/ih/workspace/openarm/models/pick2box_action_gt_36datasets_best_ep057/model.pt"
   },
-  "schema_version": 1
+  "schema_version": 2
 }
