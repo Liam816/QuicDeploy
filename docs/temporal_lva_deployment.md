@@ -136,3 +136,73 @@ $PY tools/validate_temporal_deployment.py \
 
 摘要见 [模型验证记录](validation/temporal_lva_update_00050000.json)。详细报告和数组位于
 `outputs/temporal-update50000-validation/`，按项目规则不提交 Git。数值精度、缓存及软件控制检查不代表实机任务成功率。
+
+## 显式覆盖部署 history_stride（2026-11-09）
+
+`update_00050000` 的训练、归一化和部署包清单仍保持 `history_stride=8`，不可为消除报错而改写这些原件。
+需要部署采样 stride=1 时，在模型卡的 `model` 段设置：
+
+```json
+{
+  "allow_history_stride_override": true,
+  "temporal_sampling": {
+    "history_frames": 16,
+    "history_stride": 1,
+    "window_stride": 1,
+    "source_fps": 30,
+    "padding": "current",
+    "history_time_units": "video_frames",
+    "anchor_alignment": "history_stride"
+  }
+}
+```
+
+以上仅展示相关字段，模型卡的其他字段保留。当前 FP16 和 FP32 卡均已配置为 stride 1。
+此开关只授权覆盖 `history_stride`，且必须为正整数；帧数、window_stride、源帧率、padding、时间单位和对齐规则仍需匹配训练契约。
+不开启时仍要求训练/部署采样完全一致。原始训练参数继续从经过校验的 bundle 读取；
+`load_bundle()` 分别返回有效 `sampling` 和原始 `training_sampling`。
+
+观测器、缓存适配器和 CLI 共用模型卡的有效采样值。stride 1 时取相邻 16 帧，真实偏移为 `[-15,-14,...,0]`，
+覆盖 15/30=0.5 秒；训练 stride 8 的原始偏移仍是 `[-120,-112,...,0]`，覆盖 4 秒。
+不能采集相邻帧却继续伪报 stride 8 的时间编码。归一化统计及权重不随部署 stride 改写。
+
+本次修改后重新登记两张卡的源码哈希，原始部署包八个文件的哈希全部不变。
+用户另一份 LVA 运行 YAML 的手动修改保留，未纳入本次提交。原启动命令继续使用：
+
+```bash
+QUICDEPLOY_WEBVIZ=1 bash scripts/start_temporal_lva_50000.sh --check
+QUICDEPLOY_WEBVIZ=1 bash scripts/start_temporal_lva_50000.sh --run
+```
+
+### 验证及测得的运行成本
+
+- 相关回归 31 passed，完整 `tests webviz/tests` 为 104 passed。
+- stride 1 的全 16 帧与独立 QuicForge 源码比较，FP32 context、action、启动 padding 最大误差均为 0，RTC 前缀逐位一致。
+- 实际 FP32/FP16 卡各验证启动、完整缓存、复用、移窗、无历史重叠、新会话六个场景，共 12 组通过。
+  记录图像配合合成源帧号用于验证缓存生命周期，不将其称为完整真实时序录像回放。
+- FP16 相对 FP32 最大位置差约 0.872 mm、旋转差 0.172°、夹爪差 0.135 mm，均通过原有门槛。
+- 两组实际 FP16 输出经原生 IK 和指令保护，共 130 条软件目标通过；真实机械臂未连接、未运动。
+
+在本次 RTX 3060 Laptop 上，FP16 只新增一帧的移窗约 0.116 秒；无重叠而重编码 16 帧的实际适配器调用约 1.19 秒。
+相邻推理请求若相隔超过这 16 帧的时间窗口，会失去历史 token 重叠；stride 变小不保证更快。
+当前预取窗口为 23/30≈0.767 秒，小于本次无重叠调用耗时，因此可能触发现有 `late_policy: hold` 等待保护。
+本次按用户要求仅开放部署间距覆盖，没有擅自改变动作播放速度、控制频率或保护阈值。
+数值等价和接口验证不代表 stride 1 的实机任务效果已经验证。
+
+复验命令：
+
+```bash
+PY=/home/ih/miniforge3/envs/quic-deploy/bin/python
+$PY tools/validate_temporal.py \
+  --weights models/quicforge/temporal_lva_update_00050000/weights.pt \
+  --reference-package outputs/temporal-adaptation-20261109/reference \
+  --history-stride 1 --output outputs/temporal-stride1-validation/numerical_validation.json
+$PY tools/validate_temporal_deployment.py \
+  --config configs/temporal_lva_update_00050000.yaml \
+  --fp32-card configs/models/temporal_lva_update_00050000_fp32.json \
+  --fp16-card configs/models/temporal_lva_update_00050000_fp16.json \
+  --sample outputs/quicforge_reference/episode000_frame0040.npz \
+  --output outputs/temporal-stride1-validation --ik-check
+```
+
+摘要见 [stride 1 验证记录](validation/temporal_stride1.json)，详细 JSON 和 NPY 保存在上述 outputs 目录。

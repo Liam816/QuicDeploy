@@ -1,0 +1,92 @@
+{
+  "verified_date": "2026-11-09",
+  "base_commit": "3680cd9",
+  "model_id": "temporal_lva_update_00050000_fp16",
+  "runtime_fingerprint": "f220c28257095b4e9f8a1c1eee9fc4b77036952bfd29852a0fe8aa4531d150e5",
+  "allow_history_stride_override": true,
+  "training_sampling": {
+    "history_frames": 16,
+    "history_stride": 8,
+    "window_stride": 1,
+    "source_fps": 30,
+    "padding": "current",
+    "history_time_units": "video_frames",
+    "anchor_alignment": "history_stride"
+  },
+  "deployment_sampling": {
+    "history_frames": 16,
+    "history_stride": 1,
+    "window_stride": 1,
+    "source_fps": 30,
+    "padding": "current",
+    "history_time_units": "video_frames",
+    "anchor_alignment": "history_stride"
+  },
+  "time_offsets": [
+    -15,
+    -14,
+    -13,
+    -12,
+    -11,
+    -10,
+    -9,
+    -8,
+    -7,
+    -6,
+    -5,
+    -4,
+    -3,
+    -2,
+    -1,
+    0
+  ],
+  "deployment_history_span_s": 0.5,
+  "tests": {
+    "targeted_passed": 31,
+    "full_passed": 104,
+    "command": "python -m pytest -q tests webviz/tests"
+  },
+  "reference_validation": {
+    "weights_sha256": "858a75173434952bc08583502cd2797e06cab984c0a7129586a6f764c1185876",
+    "weight_keys": 473,
+    "context_max_abs_error": 0.0,
+    "actions_max_abs_error": 0.0,
+    "startup_context_max_abs_error": 0.0,
+    "rtc_prefix_exact": true
+  },
+  "adapter_validation": {
+    "status": "passed",
+    "input_scope": "recorded-image replay with synthetic temporal frame indices",
+    "cases": 12,
+    "fp16_max_difference": {
+      "position_mm": 0.8715756093175259,
+      "rotation_deg": 0.1710155567518568,
+      "gripper_mm": 0.13472396533475717
+    },
+    "thresholds": {
+      "position_mm": 1.0,
+      "rotation_deg": 0.5,
+      "gripper_mm": 1.0
+    },
+    "software_ik_commands": 130,
+    "fp16_case_inference_s": {
+      "startup": 0.21428966597886756,
+      "full": 1.1307152709923685,
+      "reuse": 0.0314285249914974,
+      "rtc_shift": 0.11554834601702169,
+      "no_overlap": 1.1883207429782487,
+      "new_session": 0.11382298002718017
+    }
+  },
+  "runtime_timing": {
+    "prefetch_window_s": 0.7666666666666667,
+    "late_policy": "hold",
+    "observation": "Measured no-overlap inference exceeds the configured prefetch window; hold may occur. Playback and guard settings were not changed."
+  },
+  "cli_spawn_rtc_repeats": 2,
+  "launcher_check": "passed",
+  "original_training_bundle_unchanged": true,
+  "unrelated_lva_yaml_preserved": true,
+  "physical_commands_sent": 0,
+  "status": "passed"
+}

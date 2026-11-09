@@ -9,7 +9,7 @@
     "../../models/quicforge/temporal_lva_update_00050000/provenance/training_config.json": "ebdf403d30c3a22137f5c6fb7c0e03302a92750b1842fe9a0ba0d93ff92028d8",
     "../../models/quicforge/temporal_lva_update_00050000/weights.pt": "858a75173434952bc08583502cd2797e06cab984c0a7129586a6f764c1185876",
     "../../quicdeploy/config/quicforge.py": "5cf089529bdabba37eb5b6dc20df8e6f07b4824c5a63366f35e9dcc3be0a6105",
-    "../../quicdeploy/config/temporal.py": "9dc824e780328504e377b47b47861b8885877e7f58518bbae50703d471f008e8",
+    "../../quicdeploy/config/temporal.py": "8a29ecce4049289f64ef49a4546c73052f2ef793944d567d2309ff4466eb8a64",
     "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "768ba0ef808022861f0d4d7b236d4f70d7325ea7e5f324df9bb5e599e8f5cdf1",
     "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
     "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "4b945dd90894179a8ef9f0bac5591168b4703f040461afa7c9b52416ee460afe",
@@ -66,6 +66,7 @@
   "model": {
     "action_dt_s": 0.03333333333333333,
     "adapter": "quicdeploy.policy.temporal:TemporalLVAFP16Adapter",
+    "allow_history_stride_override": true,
     "artifact_dir": "../../models/quicforge/temporal_lva_update_00050000",
     "artifact_format": "quicforge_temporal_lva_v1",
     "cameras": [
@@ -170,7 +171,7 @@
     "temporal_sampling": {
       "anchor_alignment": "history_stride",
       "history_frames": 16,
-      "history_stride": 8,
+      "history_stride": 1,
       "history_time_units": "video_frames",
       "padding": "current",
       "source_fps": 30,

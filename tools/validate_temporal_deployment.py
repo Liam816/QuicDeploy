@@ -20,12 +20,13 @@ from quicdeploy.policy.base import load_adapter
 from tools.validate_quicforge import ik_check, metrics, within
 
 
-def observation(images, anchor, current, session):
-    offsets = list(range(-120, 1, 8))
+def observation(images, anchor, current, session, sampling):
+    count, stride = sampling["history_frames"], sampling["history_stride"]
+    offsets = list(range(-(count - 1) * stride, 1, stride))
     # Reuse one recorded image with synthetic frame indices to exercise cache
     # lifecycle. This is not a chronological 16-frame dataset replay.
     # 用单张记录图像和合成帧号验证缓存生命周期，不将其称作真实时序数据回放。
-    return {"images": images, "eef_state": anchor, "timestamp": current / 30,
+    return {"images": images, "eef_state": anchor, "timestamp": current / sampling["source_fps"],
             "vision_history": {"session": session, "frame_index": current, "first_frame_index": 0,
                                "time_offsets": offsets,
                                "samples": [{"frame_index": current if current + offset < 0 else current + offset, "images": images}
@@ -57,14 +58,22 @@ def main():
             if weight_hash is None:
                 weight_hash = config["model"]["weights_sha256"]
             assert config["model"]["weights_sha256"] == weight_hash
+            sampling = config["model"]["temporal_sampling"]
+            if "sampling" in report:
+                assert sampling == report["sampling"], "Precision cards use different sampling"
+            report["sampling"] = sampling
             adapter = load_adapter(dict(config["model"]))
             images = {c: sample["image_" + c] for c in config["model"]["cameras"]}
-            cases = (("startup", 0, "first", None, 1), ("full", 120, "first", None, 15),
-                     ("reuse", 120, "first", None, 0), ("rtc_shift", 128, "first", sample["prefix_absolute"], 1),
+            count, stride = sampling["history_frames"], sampling["history_stride"]
+            span = (count - 1) * stride
+            gap_frame = span + stride + max(sampling["source_fps"], count * stride)
+            cases = (("startup", 0, "first", None, 1), ("full", span, "first", None, count - 1),
+                     ("reuse", span, "first", None, 0), ("rtc_shift", span + stride, "first", sample["prefix_absolute"], 1),
+                     ("no_overlap", gap_frame, "first", None, count),
                      ("new_session", 0, "next", None, 1))
             values = {}
             for name, current, session, prefix, expected_encodings in cases:
-                obs = observation(images, sample["anchor"], current, session)
+                obs = observation(images, sample["anchor"], current, session, sampling)
                 context = {"seed": 0, "episode": 0, "anchor_index": current, "prefix_absolute": prefix}
                 started = time.monotonic()
                 raw = adapter.infer(obs, context)
@@ -72,7 +81,7 @@ def main():
                 assert raw.shape == (50, 20) and np.isfinite(raw).all()
                 assert adapter.history_diagnostics["new_frame_encodings"] == expected_encodings
                 if name == "rtc_shift":
-                    assert min(adapter.tokens) == 8 and len(adapter.tokens) == 16
+                    assert min(adapter.tokens) == stride and len(adapter.tokens) == count
                 if name == "reuse":
                     assert np.array_equal(raw, values["full"]), "Cache reuse changed predictions"
                 if name == "new_session":

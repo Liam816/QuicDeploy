@@ -68,6 +68,26 @@ def code_paths():
     return files
 
 
+def deployment_sampling(config, training_sampling):
+    """Override only frame spacing after validating the original training contract.
+    原训练契约校验通过后，只允许显式覆盖部署帧间距，其他采样语义保持严格校验。
+    """
+    allow = config.get("allow_history_stride_override", False)
+    if type(allow) is not bool:
+        raise ValueError("allow_history_stride_override must be boolean")
+    requested = config.get("temporal_sampling")
+    if not isinstance(requested, dict):
+        raise ValueError("Temporal card requires temporal_sampling")
+    effective = deepcopy(training_sampling)
+    if allow:
+        stride = requested.get("history_stride")
+        if type(stride) is not int or stride < 1:
+            raise ValueError("Deployment history_stride must be a positive integer")
+        effective["history_stride"] = stride
+    require(requested, effective, "temporal card.temporal_sampling")
+    return effective
+
+
 def load_bundle(config, *, verify_hashes=True):
     require(config.get("artifact_format"), FORMAT, "temporal artifact format")
     root = Path(config["artifact_dir"]).resolve()
@@ -89,8 +109,12 @@ def load_bundle(config, *, verify_hashes=True):
                 "camera_map": CAMERA_MAP, "temporal_sampling": sampling}
     require(manifest.get("contract"), contract, "temporal physical contract")
     for key in (*PHYSICAL_CONTRACT, "horizon", "action_dt_s", "first_target_offset_s", "fixed_prefix_steps",
-                "target_contract", "temporal_sampling"):
+                "target_contract"):
         require(config.get(key), contract[key], "temporal card." + key)
+    # Keep bundle/normalization/training stride intact; the card is the explicit
+    # deployment request. Observer and adapter consume the same effective stride.
+    # 包清单、归一化和训练 stride 不改写；模型卡声明部署值，观测器与适配器使用同一有效间距。
+    effective_sampling = deployment_sampling(config, sampling)
     for key, expected in {"supervision": "action", "uses_state": False, "uses_language": False,
                           "output_domain": "physical", "preprocessing": PREPROCESSING,
                           "cameras": ["left_wrist", "head", "right_wrist"], "weights_variant": "model",
@@ -110,5 +134,5 @@ def load_bundle(config, *, verify_hashes=True):
         require(config.get(card_key), checkpoint[key], "temporal card." + card_key)
     require(manifest["source"].get("input_weights_sha256"), manifest["files"]["weights.pt"], "temporal source weights")
     return {"manifest": manifest, "paths": paths, "model_config": model, "stats": stats,
-            "sampling": sampling, "conversion": conversion,
+            "sampling": effective_sampling, "training_sampling": sampling, "conversion": conversion,
             "backbone_repo": str(Path(__file__).resolve().parents[2] / "third_party/dinov3")}

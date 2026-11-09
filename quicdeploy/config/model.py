@@ -43,7 +43,8 @@ DESCRIPTIVE_KEYS = {"name", "architecture", "demo", "dataset_split", "training_s
 MODEL_KEYS = {*REQUIRED_KEYS, "id", "artifact_dir", "artifact_format", "source_dir", "export_metadata",
               "implementation_files", "output_domain", "fixed_prefix_steps", "preproc_sha256", "weights_sha256",
               "runtime_versions", "target_contract", "language", "num_steps", "guidance_scale", "noise_std",
-              "weights_variant", "weight_dtype", "layerscale_dtype", "temporal_sampling"}
+              "weights_variant", "weight_dtype", "layerscale_dtype", "temporal_sampling",
+              "allow_history_stride_override"}
 LVA_ADAPTERS = {
     "quicdeploy.policy.lva:" + name: precision for name, precision in (
         ("LVAAdapter", "float32"), ("LVAFP16Adapter", "float16"),
@@ -131,6 +132,8 @@ def compact_card(card):
 
 
 def validate_model(model):
+    if "allow_history_stride_override" in model and model.get("artifact_format") != "quicforge_temporal_lva_v1":
+        raise ValueError("history_stride override is only supported by Temporal-LVA")
     for key in REQUIRED_KEYS:
         if key not in model:
             raise ValueError(f"Model config missing {key}")

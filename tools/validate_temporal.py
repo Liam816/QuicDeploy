@@ -21,7 +21,11 @@ def main():
     parser.add_argument("--weights", required=True, type=Path)
     parser.add_argument("--reference-package", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--history-stride", type=int, default=8,
+                        help="deployment source-frame spacing / 部署源帧间距")
     args = parser.parse_args()
+    if args.history_stride < 1:
+        parser.error("--history-stride must be positive")
     sys.path.insert(0, str(args.reference_package))
     from quicforge.models.temporal_lva.model import TemporalLVADecoder as Reference
 
@@ -40,7 +44,8 @@ def main():
     deployed = deployed.to("cuda").eval().requires_grad_(False)
     report = {"weights": str(args.weights.resolve()), "weight_keys": len(state),
               "weights_sha256": hashlib.file_digest(args.weights.open("rb"), "sha256").hexdigest(),
-              "shape": [1, 16, 3, 448, 1824], "time_offsets": list(range(-120, 1, 8)),
+              "shape": [1, 16, 3, 448, 1824], "history_stride": args.history_stride,
+              "time_offsets": list(range(-15 * args.history_stride, 1, args.history_stride)),
               "torch": torch.__version__, "gpu": torch.cuda.get_device_name(), "scope": "offline; no hardware"}
     torch.manual_seed(123)
     frames = torch.randn(1, 16, 3, 448, 1824, device="cuda")
