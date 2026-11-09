@@ -62,7 +62,7 @@ def import_source(input_dir, checkpoint_name, conversion_meta):
     if flat:
         require(load_json(source / "model_config.json"), model_config, "flat exported model config")
         require(load_json(source / "inference_config.json"), manifest["inference"], "flat exported inference config")
-    if model_config.get("type") == "TemporalLVADecoder" and "backbone_flash_attention" in model_config:
+    if model_config.get("type") in ("LVADecoder", "TemporalLVADecoder") and "backbone_flash_attention" in model_config:
         value = model_config.pop("backbone_flash_attention")
         if type(value) is not bool:
             raise ValueError("backbone_flash_attention must be boolean")

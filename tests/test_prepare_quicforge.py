@@ -135,3 +135,64 @@ def test_flat_mismatches_are_rejected(flat, change, match):
         pin(flat)
     with pytest.raises(ValueError, match=match):
         import_source(flat, "update_00050000", flat / "conversion_meta.json")
+
+
+@pytest.fixture
+def flat_lva(flat):
+    training = json.loads((flat / "config.resolved.json").read_text())
+    checkpoint = json.loads((flat / "checkpoint_manifest.json").read_text())
+    exported = json.loads((flat / "model_config.json").read_text())
+    for model in (training["model"], checkpoint["model"], exported):
+        model["type"] = "LVADecoder"
+    training["data"].update(history_frames=1, history_stride=1, window_stride=1)
+    checkpoint.update(name="update_00100000", global_step=100000, epoch=132)
+    checkpoint["config_hash"] = hashlib.sha256(json.dumps(training, sort_keys=True, ensure_ascii=False,
+                                                           separators=(",", ":")).encode()).hexdigest()
+    stats = json.loads((flat / "normalization.json").read_text())
+    stats.update(history_frames=1, history_stride=1, window_stride=1, history_first_anchor=0)
+    for name, value in (("config.resolved.json", training), ("checkpoint_manifest.json", checkpoint),
+                        ("model_config.json", exported), ("normalization.json", stats)):
+        write(flat / name, value)
+    pin(flat)
+    return flat
+
+
+def test_single_frame_import_preserves_attention_provenance(flat_lva):
+    original = (flat_lva / "model_config.json").read_bytes()
+    _, _, _, checkpoint, model, provenance = import_source(flat_lva, "update_00100000", flat_lva / "conversion_meta.json")
+    assert checkpoint["global_step"] == 100000
+    assert "backbone_flash_attention" not in model
+    assert provenance["training_model_options"] == {"backbone_flash_attention": True}
+    assert (flat_lva / "model_config.json").read_bytes() == original
+
+
+def test_single_frame_prepare_registers_both_precisions(flat_lva, tmp_path, monkeypatch):
+    import tools.prepare_quicforge as importer
+    from quicdeploy.common.io import PROJECT_ROOT
+    project = tmp_path / "single_deploy"
+    (project / "configs/models").mkdir(parents=True)
+    (project / "quicdeploy").symlink_to(PROJECT_ROOT / "quicdeploy", target_is_directory=True)
+    monkeypatch.setattr(importer, "PROJECT", project)
+    output = project / "models/lva100000"
+    prepare(flat_lva, "update_00100000", flat_lva / "conversion_meta.json", output, "lva_update100000")
+    for precision in ("fp32", "fp16"):
+        card = load_model_card(project / f"configs/models/lva_update100000_{precision}.json")
+        assert card["model"]["artifact_format"] == "quicforge_lva_v1"
+        assert "temporal_sampling" not in card["model"]
+        assert card["metadata"]["checkpoint"] == {"epoch": 132, "global_step": 100000}
+        assert card["model"]["weight_dtype"] == ("float32" if precision == "fp32" else "float16")
+    assert sha256(output / "weights.pt") == sha256(flat_lva / "model.pt")
+    assert json.loads((output / "provenance/training_config.json").read_text())["model"]["backbone_flash_attention"] is True
+
+
+def test_single_frame_attention_mismatch_is_not_ignored(flat_lva):
+    training = json.loads((flat_lva / "config.resolved.json").read_text())
+    training["model"]["backbone_flash_attention"] = False
+    checkpoint = json.loads((flat_lva / "checkpoint_manifest.json").read_text())
+    checkpoint["config_hash"] = hashlib.sha256(json.dumps(training, sort_keys=True, ensure_ascii=False,
+                                                           separators=(",", ":")).encode()).hexdigest()
+    write(flat_lva / "config.resolved.json", training)
+    write(flat_lva / "checkpoint_manifest.json", checkpoint)
+    pin(flat_lva)
+    with pytest.raises(ValueError, match="training attention implementation"):
+        import_source(flat_lva, "update_00100000", flat_lva / "conversion_meta.json")

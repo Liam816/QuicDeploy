@@ -1,6 +1,6 @@
 # QuicForge LVA 部署 / Deployment
 
-当前已接入 **pick_kun_once_e50_bs20，epoch 50 / step 43700，model 原始权重**。
+首个接入模型为 **pick_kun_once_e50_bs20，epoch 50 / step 43700，model 原始权重**。
 这份是最后一轮，不是训练目录中指向 epoch 25 的 best；没有伪造旧 checkpoint 外层字段。
 支持范围：单帧、无 task conditioning、action-GT、50×20、RTC 最长 10 步。
 Temporal/multi-task/state-GT 导出会明确报错。
@@ -123,3 +123,73 @@ python -m pytest -q tests
 PyTorch 2.11.0+cu128 / NumPy 2.2.6 上运行，不把结果写成与训练机 2.10 的逐位对比。
 IK 使用理想软件执行模型，不包含真实跟踪误差、碰撞/负载或相机实时延迟。
 尚未执行这份模型的真机验收。
+
+
+## LVA update_00100000（2026-11-09）
+
+已接入 `/home/ih/heping/checkpoints/LVA_update_00100000`：**epoch 132 / step 100000**，
+单帧 `LVADecoder`，history_frames / history_stride / window_stride 为 1 / 1 / 1。
+权重 SHA-256 为 `aeda82b3687a29ff486dd0ea628a5ba903b7fc24348246400eb36d20977db070`。
+
+- 运行配置：`configs/lva_update_00100000.yaml`，默认 FP16，继承公共配置。
+- 模型卡：`configs/models/lva_update_00100000_fp16.json` 和 `_fp32.json`。
+- 部署包：`models/quicforge/lva_update_00100000/`，运行时不读上传目录。
+- 专用脚本：`scripts/start_lva_100000.sh`，固定选择本配置并清除旧模型环境覆盖。
+
+```bash
+cd /home/ih/heping/projects/QuicDeploy
+bash scripts/start_lva_100000.sh --check
+# 会连接、使能并回零机械臂，需操作者值守。
+bash scripts/start_lva_100000.sh --run
+```
+
+复用现有单帧加载器、RTC、调度、IK 与指令保护：控制 50 Hz、动作播放 30 Hz；
+async、RTC 前缀 10 行，每块选用 40 行，剩余 20 行时预取（约 0.67 秒）。
+实际子进程热启动推理测得约 0.50 秒，因此该模型单独提前预取；该测量不代表实机延迟保证。未更改全局默认模型。
+
+平铺导入会重新核对 8 个源文件的大小/哈希、训练配置规范哈希、checkpoint 名称和导出侧车一致性。
+训练侧的 `backbone_flash_attention=true` 处理从 Temporal-LVA 扩展到已支持的单帧 `LVADecoder`：
+核对布尔类型和训练/checkpoint 一致性后，将原值保留在 `source.training_model_options`，
+从部署构造参数中移除；复用冻结的 CUDA 实现，不引入 MUSA 训练补丁。原始上传资产不改写。
+
+```bash
+PY=/home/ih/miniforge3/envs/quic-deploy/bin/python
+# 已执行；已有包和模型卡会触发拒绝覆盖。
+$PY tools/prepare_quicforge.py \
+  --input /home/ih/heping/checkpoints/LVA_update_00100000 \
+  --checkpoint update_00100000 \
+  --conversion-meta /home/ih/heping/checkpoints/LVA_update_00100000/conversion_meta.json \
+  --output models/quicforge/lva_update_00100000 --card-stem lva_update_00100000
+```
+
+### 本模型的离线验证
+
+为这份权重重新生成专属参考，使用独立保存的原 QuicForge 网络及部署机已有录像 episode 0 的 0/40/80 帧。
+参考权重哈希与模型卡绑定，不复用其他模型的旧参考输出。生成参考所用 pyarrow/torchvision 开发环境不属于部署运行依赖。
+
+- 接入前完整基线 78 项；接入后 **81 passed**，含单帧/时序导入及原控制、指标和可视化回归。
+  此工作区包含 5 项已有未提交指标测试；另外仅使用已提交 HEAD 和本次代码/配置的干净临时副本为 **76 passed**，不依赖这些未提交功能。
+- 三份样本 × FP32/FP16 × 普通/RTC，共 12 组通过既有门槛。
+- FP32 预处理和物理动作数组最大分量差均为 0。
+- FP16 相对 FP32 最大位置差 0.2047 mm、旋转差 0.02131°、夹爪差 0.07207 mm。
+- 三组实际无前缀预测经原生 IK 和指令保护，共 195 条软件目标通过，物理指令数 0。
+- 专用脚本在错误旧环境覆盖存在时仍选中新模型，配置和硬件在位检查通过。
+- 实际 CLI/spawn 连续两次 RTC 推理通过；未执行真实机械臂运行。
+
+```bash
+# 生成这份权重的独立参考（开发环境）。
+/home/ih/workspace/yihuigou/openarm_workspace_hp/.venv/bin/python tools/build_local_quicforge_reference.py \
+  --bundle models/quicforge/lva_update_00100000 \
+  --dataset /home/ih/workspace/yihuigou/openarm_workspace/data/lerobot_20261027_144156 \
+  --output outputs/lva-update100000-reference
+# 对比部署精度及离线控制链（运行环境）。
+$PY tools/validate_quicforge.py --fixtures outputs/lva-update100000-reference \
+  --config configs/lva_update_00100000.yaml \
+  --fp32-card configs/models/lva_update_00100000_fp32.json \
+  --fp16-card configs/models/lva_update_00100000_fp16.json \
+  --output outputs/lva-update100000-validation --ik-check
+```
+
+摘要见 [update_00100000 验证记录](validation/lva_update_00100000.json)。
+详细数组、参考和报告位于上述 `outputs/` 目录，按现有规则不提交 Git。
+本次只提交 LVA 接入相关文件；此前的推理指标/可视化未提交工作保留，不纳入本次提交。

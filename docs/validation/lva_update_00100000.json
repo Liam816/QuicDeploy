@@ -1,0 +1,84 @@
+{
+  "verified_date": "2026-11-09",
+  "base_commit": "b292366",
+  "model_id": "lva_update_00100000_fp16",
+  "source_upload": "/home/ih/heping/checkpoints/LVA_update_00100000",
+  "source_files_verified": 8,
+  "checkpoint": {
+    "epoch": 132,
+    "global_step": 100000,
+    "weights_sha256": "aeda82b3687a29ff486dd0ea628a5ba903b7fc24348246400eb36d20977db070"
+  },
+  "runtime_fingerprint": "69b17158dea0d1d1c8a48dac1b839a313ab05c7a3f2b36987c7ce28a3da49118",
+  "execution": {
+    "policy_overclock_enabled": false,
+    "mode": "async",
+    "prefix_steps": 10,
+    "control_hz": 50,
+    "n_action_steps": 40,
+    "prefetch_remaining_steps": 20,
+    "handoff_margin_s": 0.011,
+    "max_inference_wait_s": 15.0,
+    "max_tick_lateness_s": 0.02,
+    "late_policy": "hold",
+    "policy_hz": 30.0
+  },
+  "tests": {
+    "workspace_baseline_passed": 78,
+    "workspace_passed": 81,
+    "clean_head_plus_this_change_passed": 76,
+    "workspace_note": "includes five preexisting uncommitted inference metrics tests",
+    "command": "python -m pytest -q tests webviz/tests"
+  },
+  "independent_reference": {
+    "source": "Original QuicForge network and evaluator functions on deployment-local task recordings",
+    "source_sha256": {
+      "models/lva/model.py": "608af1afe23fd328c27a4000de9a251a4f4b605cf03e3fc18b3dcf1a008cac6d",
+      "models/lva/decoder.py": "8b44a5182275ba0f5d7288579dc9d393034517908e1f1b14f46552090db30ea3",
+      "models/lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+      "models/lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+      "data/lva/dataset.py": "105687be4c02294a33f5a95995a2ea2385a1d70819bf2bd57cff5d2d8c54ee50",
+      "evaluation/lva_episode.py": "17130716f509538310babfa2ff8fbced3ac05b90513328c6f3883ef5ff715067",
+      "data/lva/datamodule.py": "d7920175679de7a9e2ee89ef441b5164e6a2a8ab9dc7e30423047a21c5452cc1"
+    },
+    "checkpoint_weights_sha256": "aeda82b3687a29ff486dd0ea628a5ba903b7fc24348246400eb36d20977db070",
+    "frames": [
+      0,
+      40,
+      80
+    ]
+  },
+  "numerical_validation": {
+    "cases": 12,
+    "fp32_max_abs_component": 0.0,
+    "preprocess_max_abs_difference": 0.0,
+    "fp16_max_difference": {
+      "position_mm": 0.20461158826157344,
+      "rotation_deg": 0.021306950125348383,
+      "gripper_mm": 0.07206797551397415
+    },
+    "thresholds": {
+      "fp32": {
+        "position_mm": 0.05,
+        "rotation_deg": 0.02,
+        "gripper_mm": 0.05
+      },
+      "fp16": {
+        "position_mm": 1.0,
+        "rotation_deg": 0.5,
+        "gripper_mm": 1.0
+      }
+    },
+    "rtc_prefix_max_abs_difference": 2.498001805406602e-16
+  },
+  "software_ik_commands": 195,
+  "cli_spawn_rtc_repeats": 2,
+  "measured_cli_warm_inference_s": 0.5030611829715781,
+  "prefetch_reason": "20 rows at 30 Hz leave 0.667 s for the observed roughly 0.50 s worker inference; not a real-time latency guarantee",
+  "launcher_check": "passed with stale model/config overrides cleared",
+  "hardware_presence": "two 1 Mbps CAN interfaces and 3 cameras",
+  "preexisting_paths_preserved": 16,
+  "physical_commands_sent": 0,
+  "detailed_report": "outputs/lva-update100000-validation/report.json",
+  "status": "passed"
+}

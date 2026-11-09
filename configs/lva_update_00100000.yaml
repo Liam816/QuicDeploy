@@ -1,0 +1,9 @@
+# Single-frame LVA step100000 / epoch132 / FP16; inherit shared timing and guards.
+# 单帧 LVA：step100000 / epoch132 / FP16，继承公共调度参数与指令保护。
+schema_version: 2
+extends: defaults.yaml
+model: models/lva_update_00100000_fp16.json
+execution:
+  # The measured worker inference is about 0.5s; reserve 20/30s before queue end.
+  # 实测子进程推理约 0.5 秒，提前 20/30 秒发起下一块，保留交接余量。
+  prefetch_remaining_steps: 20
