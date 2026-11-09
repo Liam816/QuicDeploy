@@ -62,6 +62,7 @@ class RunRecorder:
         if config["kinematics"].get("urdf"):
             (self.out / "kinematics.urdf").write_bytes(Path(config["kinematics"]["urdf"]).read_bytes())
         self.diagnostics = diagnostics
+        self.webviz = None  # optional, read-only background telemetry
         self.result = {
             "status": "running", "mode": config["execution"]["mode"], "fingerprint": config["fingerprint"],
             "model_id": config["model"]["id"], "hardware_commands": 0, "prediction_events": [],
@@ -88,6 +89,8 @@ class RunRecorder:
 
     def save_prediction(self, step, reply, accepted, request, observation, *, held_verified=False):
         self.trajectory_steps[id(accepted.e)] = step
+        if self.webviz is not None:
+            self.webviz.publish_prediction(step, reply, accepted, request, observation)
         if not self.diagnostics:
             return
         arrays = prediction_arrays(reply, accepted, request, observation, held_verified=held_verified)

@@ -94,6 +94,12 @@ class LiveSession:
         self.last_command = None         # last guarded command (sync hold check) / 最后一条放行指令
         self.last_reply = None
         self.measured = None
+        if os.environ.get("QUICDEPLOY_WEBVIZ", "0") == "1":
+            try:
+                from webviz.telemetry import start
+                self.rec.webviz = start(self)
+            except Exception as error:
+                print(f"Web visualization unavailable; inference continues: {error}", flush=True)
 
     # ================================================================== lifecycle
     def run(self):
@@ -171,6 +177,8 @@ class LiveSession:
             cleanup("model_worker", self.worker.close)
         if self.ik is not None:
             cleanup("ik_worker", self.ik.close)
+        if self.rec.webviz is not None:
+            cleanup("webviz", self.rec.webviz.close)
         self.rec.finish()
 
     # ================================================================== helpers

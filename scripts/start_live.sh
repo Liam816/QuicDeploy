@@ -44,4 +44,15 @@ if [[ "$1" == "--check" ]]; then
   exec "${QI[@]}" live
 fi
 shift
+# Read-only visualization sidecar; failures do not change inference or robot guards.
+# 只读可视化旁路；默认开启，QUICDEPLOY_WEBVIZ=0 可关闭。
+export QUICDEPLOY_WEBVIZ="${QUICDEPLOY_WEBVIZ:-1}"
+if [[ "$QUICDEPLOY_WEBVIZ" == "1" ]]; then
+  WEBVIZ=("$PYTHON_BIN" -m webviz.launcher --config "$CONFIG")
+  [[ -n "${QUICDEPLOY_MODEL:-}" ]] && WEBVIZ+=(--model "$QUICDEPLOY_MODEL")
+  if ! "${WEBVIZ[@]}"; then
+    echo "Web visualization unavailable; continuing with visualization disabled." >&2
+    export QUICDEPLOY_WEBVIZ=0
+  fi
+fi
 exec "${QI[@]}" live --run "${DIAG[@]}" "$@"
