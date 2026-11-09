@@ -67,3 +67,72 @@ $PY -m quicdeploy --config configs/temporal_lva_pick_kun.yaml infer --repeat 3
 FP16 保留官方 ViT-B 的 24 个 LayerScale gamma 及 RoPE periods 为 FP32，转换前先保存原值，避免先转 half 溢出或舍入后再转回。FP16 与 FP32 不是逐位等价，表中误差不等于实际位置/旋转误差，也不代表实机任务成功率。
 
 验证报告保存在 `outputs/temporal-adaptation-20261109/numerical_validation.json`。复验工具为 `tools/validate_temporal.py`；启动 padding、缓存复用/淘汰、source-frame 采样、相位与新鲜度、模型卡契约覆盖在 `tests/test_temporal.py`。实机控制周期和具体目标 e50 权重仍须在完整资产导入后验证。
+
+
+## update_00050000：已接入配置（2026-11-09）
+
+本次基于 `feat/adapt_temporal_vla_infer` 的 `dc07791` 接入实际上传资产：
+`/home/ih/heping/checkpoints/Temporal-LVA_update_00050000`。checkpoint 身份为 **epoch 51 / step 50000**。
+生成的 FP32/FP16 卡分别是 `configs/models/temporal_lva_update_00050000_{fp32,fp16}.json`，
+运行配置为 `configs/temporal_lva_update_00050000.yaml`，部署包为 `models/quicforge/temporal_lva_update_00050000/`。
+原始上传目录保留；默认 `runtime.yaml` 的模型选择未改动。
+
+```bash
+cd /home/ih/heping/projects/QuicDeploy
+conda activate quic-deploy
+bash scripts/start_temporal_lva_50000.sh --check
+# 下列命令会连接、使能并回零机械臂，需操作者值守。
+bash scripts/start_temporal_lva_50000.sh --run
+```
+
+专用脚本固定使用本模型配置，并清除终端遗留的模型覆盖。
+实际参数：16 帧 / stride 8 / window 1；控制 50 Hz、动作行播放 30 Hz；async + RTC 前缀 10；
+每块选用 40 行，剩余 23 行时预取；启动/恢复采用当前帧 padding，复用现有 token 缓存、IK 与指令保护。
+硬件在位检查已通过（两路 1 Mbps CAN、三路相机），未连接或运动真实机械臂。
+
+### 从平铺上传目录导入
+
+```bash
+PY=/home/ih/miniforge3/envs/quic-deploy/bin/python
+$PY tools/prepare_quicforge.py \
+  --input /home/ih/heping/checkpoints/Temporal-LVA_update_00050000 \
+  --checkpoint update_00050000 \
+  --conversion-meta /home/ih/heping/checkpoints/Temporal-LVA_update_00050000/conversion_meta.json \
+  --output models/quicforge/temporal_lva_update_00050000 \
+  --card-stem temporal_lva_update_00050000
+```
+
+该命令已执行；目标包/模型卡存在时会拒绝覆盖。平铺导入要求 `download_manifest.json` 覆盖全部必要资产，
+逐文件重算大小与 SHA-256，拒绝重复/越界路径，并核对 checkpoint 名称、训练配置规范哈希、导出构造参数和推理参数。
+本次 15 个源文件全部通过，配置哈希为 `2954e9b1d280cef8f7b686d798e45ef3dd05c9fc0b792e3ead69ae17585b1f50`。
+原始 run/checkpoints 层级的导入方式继续支持。
+
+`backbone_flash_attention=true` 是该训练环境的 MUSA 加速开关，不增加权重键。
+导入器核对其布尔类型和训练配置一致性后，将原值记入部署清单的 `source.training_model_options`，
+从部署构造参数中移除；原始训练/ checkpoint 元数据不变。训练机 `backbone_repo` 路径同样由已有逻辑替换为项目冻结源码。
+推理使用已适配的 CUDA/DINOv3 实现，没有引入 MUSA 训练补丁。配置、训练来源、归一化和权重身份校验继续执行。
+
+### 本 checkpoint 的验证
+
+- 修改前 60 项回归通过；修改后 `python -m pytest -q tests webviz/tests` 为 **73 passed**。
+- 473 个权重键严格加载；完整 16 帧输入与独立 QuicForge 源码对比，FP32 context、action、启动 padding 最大误差均为 0，RTC 前缀逐位一致。
+- 两张实际模型卡各运行启动、完整缓存、缓存复用、RTC 移窗、会话重置 5 个场景，共 10 个通过。
+  使用一份记录图像和合成源帧号验证缓存生命周期；它不是完整真实时序录像回放。
+- 该输入下 FP16 相对 FP32 最大位置差 0.8351 mm、旋转差 0.1737°、夹爪差 0.1609 mm，
+  通过 1 mm / 0.5° / 1 mm 门槛；缓存复用输出和会话重置输出各自逐元素一致。
+- FP16 两组实际预测通过原生 IK 和指令保护，共检查 130 条软件目标；物理指令数 0。
+- CLI/spawn 推理进程连续两次 RTC 推理通过；专用脚本 `--check` 在设置错误旧环境变量后仍选择本模型并通过检查。
+
+复验实际模型卡与控制目标：
+
+```bash
+$PY tools/validate_temporal_deployment.py \
+  --config configs/temporal_lva_update_00050000.yaml \
+  --fp32-card configs/models/temporal_lva_update_00050000_fp32.json \
+  --fp16-card configs/models/temporal_lva_update_00050000_fp16.json \
+  --sample outputs/quicforge_reference/episode000_frame0040.npz \
+  --output outputs/temporal-update50000-validation --ik-check
+```
+
+摘要见 [模型验证记录](validation/temporal_lva_update_00050000.json)。详细报告和数组位于
+`outputs/temporal-update50000-validation/`，按项目规则不提交 Git。数值精度、缓存及软件控制检查不代表实机任务成功率。

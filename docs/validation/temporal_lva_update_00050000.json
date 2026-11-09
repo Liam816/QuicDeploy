@@ -1,0 +1,80 @@
+{
+  "verified_date": "2026-11-09",
+  "base_commit": "dc07791",
+  "model_id": "temporal_lva_update_00050000_fp16",
+  "checkpoint": {
+    "epoch": 51,
+    "global_step": 50000,
+    "weights_sha256": "858a75173434952bc08583502cd2797e06cab984c0a7129586a6f764c1185876"
+  },
+  "source_upload": "/home/ih/heping/checkpoints/Temporal-LVA_update_00050000",
+  "uploaded_files_verified": 15,
+  "runtime_fingerprint": "da6cff50e1c25f2c0fbf017876fb08dccaddb67eab233bf3932f5791b5e61ccc",
+  "temporal_sampling": {
+    "anchor_alignment": "history_stride",
+    "history_frames": 16,
+    "history_stride": 8,
+    "history_time_units": "video_frames",
+    "padding": "current",
+    "source_fps": 30,
+    "window_stride": 1
+  },
+  "execution": {
+    "policy_overclock_enabled": false,
+    "mode": "async",
+    "prefix_steps": 10,
+    "control_hz": 50,
+    "n_action_steps": 40,
+    "prefetch_remaining_steps": 23,
+    "handoff_margin_s": 0.011,
+    "max_inference_wait_s": 15.0,
+    "max_tick_lateness_s": 0.02,
+    "late_policy": "hold",
+    "policy_hz": 30.0
+  },
+  "tests": {
+    "baseline_passed": 60,
+    "passed": 73,
+    "command": "python -m pytest -q tests webviz/tests"
+  },
+  "independent_reference": {
+    "weight_keys": 473,
+    "shape": [
+      1,
+      16,
+      3,
+      448,
+      1824
+    ],
+    "context_max_abs_error": 0.0,
+    "actions_max_abs_error": 0.0,
+    "startup_context_max_abs_error": 0.0,
+    "rtc_prefix_exact": true,
+    "fp16_actions_max_abs_difference": 0.005054950714111328
+  },
+  "adapter_validation": {
+    "status": "passed",
+    "input_scope": "recorded-image replay with synthetic temporal frame indices",
+    "cases": 10,
+    "fp16_max_difference": {
+      "position_mm": 0.8350382258233003,
+      "rotation_deg": 0.17369233539991927,
+      "gripper_mm": 0.1608962433261354
+    },
+    "thresholds": {
+      "position_mm": 1.0,
+      "rotation_deg": 0.5,
+      "gripper_mm": 1.0
+    },
+    "software_ik_commands": 130
+  },
+  "cli_spawn_rtc_repeats": 2,
+  "launcher_check": "passed with stale environment overrides cleared",
+  "hardware_presence": "two 1 Mbps CAN interfaces and 3 cameras",
+  "physical_commands_sent": 0,
+  "detailed_reports": [
+    "outputs/temporal-update50000-validation/numerical_validation.json",
+    "outputs/temporal-update50000-validation/deployment_validation.json"
+  ],
+  "status": "passed"
+}

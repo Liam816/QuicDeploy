@@ -3,6 +3,7 @@
     python tools/prepare_quicforge.py --input <uploaded-run> --conversion-meta <conversion_meta.json>
 """
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -15,21 +16,68 @@ sys.path.insert(0, str(PROJECT))
 
 from quicdeploy.common.io import load_json, sha256
 from quicdeploy.config.model import PHYSICAL_CONTRACT, compact_card, register
-from quicdeploy.config.quicforge import CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET, validate_inputs
+from quicdeploy.config.quicforge import CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET, require, validate_inputs
 
 
-def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
+def import_source(input_dir, checkpoint_name, conversion_meta):
+    """Read an original run or a verified flat download without rewriting either.
+    读取原始训练目录或经过哈希校验的平铺下载目录，不修改上传原件。
+    """
     source = Path(input_dir).resolve()
-    checkpoint = source / "checkpoints" / checkpoint_name
-    if not (checkpoint / "backend/model.pt").is_file():
-        raise ValueError(f"Missing QuicForge checkpoint: {checkpoint}")
-    training = load_json(source / "config.resolved.json")
-    manifest = load_json(checkpoint / "manifest.json")
-    stats = load_json(checkpoint / "assets/normalization.json")
-    conversion = load_json(conversion_meta)
+    flat = (source / "checkpoint_manifest.json").is_file()
+    checkpoint = source if flat else source / "checkpoints" / checkpoint_name
+    paths = {"weights": checkpoint / ("model.pt" if flat else "backend/model.pt"),
+             "normalization": checkpoint / ("normalization.json" if flat else "assets/normalization.json"),
+             "checkpoint": checkpoint / ("checkpoint_manifest.json" if flat else "manifest.json"),
+             "training": source / "config.resolved.json", "conversion": Path(conversion_meta).resolve()}
+    for path in paths.values():
+        if not path.is_file():
+            raise ValueError(f"Missing QuicForge import asset: {path}")
+    provenance = {"kind": "quicforge_flat_checkpoint" if flat else "quicforge_checkpoint",
+                  "directory": str(checkpoint)}
+    if flat:
+        transfer = load_json(source / "download_manifest.json")
+        verified = set()
+        for entry in transfer["files"]:
+            name = Path(entry["name"])
+            file = (source / name).resolve()
+            if name.is_absolute() or ".." in name.parts or not file.is_relative_to(source) or file in verified:
+                raise ValueError(f"Invalid/duplicate downloaded asset: {name}")
+            if file.stat().st_size != entry["bytes"] or sha256(file) != entry["sha256"]:
+                raise ValueError(f"Downloaded asset changed: {name}")
+            verified.add(file)
+        required = {*paths.values(), source / "model_config.json", source / "inference_config.json"}
+        if not {p.resolve() for p in required} <= verified:
+            raise ValueError("Flat download manifest must pin all import assets")
+        provenance["transfer_manifest_sha256"] = sha256(source / "download_manifest.json")
+    training, manifest = load_json(paths["training"]), load_json(paths["checkpoint"])
+    if flat:
+        require(manifest.get("name"), checkpoint_name, "flat checkpoint name")
+        encoded = json.dumps(training, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        require(hashlib.sha256(encoded.encode()).hexdigest(), manifest.get("config_hash"), "training config hash")
+        provenance["config_hash"] = manifest["config_hash"]
     model_config = dict(manifest["model"])
     model_config.pop("weights", None)
     model_config.update(manifest["model_capabilities"]["inference_kwargs"])
+    if flat:
+        require(load_json(source / "model_config.json"), model_config, "flat exported model config")
+        require(load_json(source / "inference_config.json"), manifest["inference"], "flat exported inference config")
+    if model_config.get("type") == "TemporalLVADecoder" and "backbone_flash_attention" in model_config:
+        value = model_config.pop("backbone_flash_attention")
+        if type(value) is not bool:
+            raise ValueError("backbone_flash_attention must be boolean")
+        require(training["model"].get("backbone_flash_attention"), value, "training attention implementation")
+        # MUSA's training acceleration changes no state_dict keys. Deployment uses
+        # the existing frozen CUDA backbone, not the training-only flash patch.
+        # MUSA 训练加速不改变权重键；部署复用已冻结的 CUDA 骨干，不导入训练专用补丁。
+        provenance["training_model_options"] = {"backbone_flash_attention": value}
+    return source, paths, training, manifest, model_config, provenance
+
+
+def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
+    source, paths, training, manifest, model_config, provenance = import_source(input_dir, checkpoint_name, conversion_meta)
+    stats = load_json(paths["normalization"])
+    conversion = load_json(paths["conversion"])
     inference = manifest["inference"]
     temporal = model_config.get("type") == "TemporalLVADecoder"
     bundle_format = FORMAT
@@ -63,19 +111,19 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
     with tempfile.TemporaryDirectory(prefix=".quicforge-import-", dir=output.parent) as tmp:
         bundle = Path(tmp) / "bundle"
         (bundle / "provenance").mkdir(parents=True)
-        shutil.copyfile(checkpoint / "backend/model.pt", bundle / "weights.pt")
-        shutil.copyfile(checkpoint / "assets/normalization.json", bundle / "normalization.json")
-        for source_file, destination in ((source / "config.resolved.json", "training_config.json"),
-                                         (checkpoint / "manifest.json", "checkpoint.json"),
-                                         (Path(conversion_meta), "conversion_meta.json")):
+        shutil.copyfile(paths["weights"], bundle / "weights.pt")
+        shutil.copyfile(paths["normalization"], bundle / "normalization.json")
+        for source_file, destination in ((paths["training"], "training_config.json"),
+                                         (paths["checkpoint"], "checkpoint.json"),
+                                         (paths["conversion"], "conversion_meta.json")):
             shutil.copyfile(source_file, bundle / "provenance" / destination)
         for name, value in (("model_config.json", model_config), ("inference_config.json", inference)):
             (bundle / name).write_text(json.dumps(value, indent=2) + "\n")
         hashes = {name: sha256(bundle / name) for name in sorted(FILES)}
-        if hashes["weights.pt"] != sha256(checkpoint / "backend/model.pt"):
+        if hashes["weights.pt"] != sha256(paths["weights"]):
             raise ValueError("Weights changed while copying")
         deployment = {"schema_version": 1, "format": bundle_format, "files": hashes,
-                      "source": {"kind": "quicforge_checkpoint", "directory": str(checkpoint),
+                      "source": {**provenance,
                                  "epoch": manifest["epoch"], "global_step": manifest["global_step"],
                                  "input_weights_sha256": hashes["weights.pt"]},
                       "contract": {**PHYSICAL_CONTRACT, "horizon": 50, "action_dt_s": 1 / 30,
@@ -116,7 +164,8 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
                  "implementation_files": [relative(output / p) for p in sorted(FILES - {"weights.pt", "normalization.json"})]
                                          + [relative(p) for p in code]}
         if temporal:
-            model.update(architecture="DINOv3 ViT-B + spatial queries + temporal queries + FM",
+            model.update(name=f"Temporal-LVA · Pick Kun Once · Epoch {manifest['epoch']} · Step {manifest['global_step']} · {precision.upper()}",
+                         architecture="DINOv3 ViT-B + spatial queries + temporal queries + FM",
                          temporal_sampling=sampling,
                          adapter="quicdeploy.policy.temporal:" +
                                  ("TemporalLVAAdapter" if precision == "fp32" else "TemporalLVAFP16Adapter"))
@@ -136,7 +185,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True, type=Path)
+    parser.add_argument("--input", required=True, type=Path, help="original run or verified flat download / 原始训练目录或已校验平铺资产")
     parser.add_argument("--checkpoint", default="update_00043700")
     parser.add_argument("--conversion-meta", required=True, type=Path)
     parser.add_argument("--output", type=Path, default=PROJECT / "models/quicforge/pick_kun_once_e50_bs20")

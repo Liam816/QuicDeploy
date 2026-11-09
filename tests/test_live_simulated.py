@@ -21,11 +21,11 @@ from quicdeploy.common.layout import JOINT_COLUMNS
 CONFIG = PROJECT_ROOT / "configs/runtime.yaml"
 
 
-def _config(model_card=None, **execution):
+def _config(model_card=None, config_path=CONFIG, **execution):
     from quicdeploy.config.resolve import resolve
 
     try:
-        config = resolve(CONFIG, model_card=model_card)
+        config = resolve(config_path, model_card=model_card)
     except (FileNotFoundError, ValueError) as exc:
         pytest.skip(f"deployment files unavailable on this host: {exc}")
     if not Path(config["kinematics"]["python"]).exists():
@@ -36,18 +36,28 @@ def _config(model_card=None, **execution):
 
 class FakeCamera:
     def __init__(self):
+        from collections import deque
         self.frame_lock = threading.Lock()
+        self.fps, self.frame_index = 30, 0
+        self.frame_history = deque(maxlen=1)
         self.latest_frame = None
         self.latest_timestamp = None
         self._stop = threading.Event()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
+    def enable_history(self, capacity):
+        from collections import deque
+        with self.frame_lock:
+            self.frame_history = deque(self.frame_history, maxlen=capacity)
+
     def _run(self):
         frame = np.full((480, 640, 3), 128, np.uint8)
         while not self._stop.is_set():
             with self.frame_lock:
                 self.latest_frame, self.latest_timestamp = frame, time.monotonic()
+                self.frame_history.append((self.frame_index, self.latest_timestamp, frame))
+                self.frame_index += 1
             time.sleep(1 / 30)
 
 
@@ -95,9 +105,15 @@ class FakeWorker:
 
     def __init__(self, config):
         self.pending = None
+        self.temporal = config.get("temporal_sampling")
 
     def submit(self, observation, context):
         assert self.pending is None
+        if self.temporal:
+            history = observation["vision_history"]
+            count, stride = self.temporal["history_frames"], self.temporal["history_stride"]
+            assert len(history["samples"]) == count
+            assert history["time_offsets"] == list(range(-(count - 1) * stride, 1, stride))
         self.pending = (time.monotonic(), observation, context)
 
     def poll(self):
@@ -171,10 +187,14 @@ def patched(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("mode", ["async_rtc", "sync"])
-@pytest.mark.parametrize("model_card", [None, PROJECT_ROOT / "configs/models/quicforge_pick_kun_ep050_step43700_fp16.json"])
-def test_live_session_simulated(patched, mode, model_card):
+@pytest.mark.parametrize("config_path,model_card", [
+    (CONFIG, None),
+    (CONFIG, PROJECT_ROOT / "configs/models/quicforge_pick_kun_ep050_step43700_fp16.json"),
+    (PROJECT_ROOT / "configs/temporal_lva_update_00050000.yaml", None),
+])
+def test_live_session_simulated(patched, mode, config_path, model_card):
     extra = {} if mode == "async_rtc" else dict(mode="sync", prefix_steps=0, prefetch_remaining_steps=0)
-    config = _config(model_card=model_card, **extra)
+    config = _config(model_card=model_card, config_path=config_path, **extra)
     result = patched.LiveSession(config, diagnostics=True, duration_s=4.0).run()
     arm = FakeArm.instances[-1]
     assert result["status"] == "paused" or result["status"] == "passed", result
