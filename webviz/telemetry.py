@@ -65,6 +65,8 @@ class Telemetry:
         return {"session_id": self.id, "source": "live", "status": status, "finished": final,
                 "model": session.config["model"]["id"], "mode": session.mode,
                 "control_hz": session.exe["control_hz"], "policy_hz": session.exe["policy_hz"],
+                "inference": (session.rec.inference_metrics.snapshot()
+                              if hasattr(session, "rec") and hasattr(session.rec, "inference_metrics") else None),
                 "previous": cached_values[0], "current": cached_values[1],
                 "robot": {"joints": None if measured is None else measured.tolist(),
                           "command": None if session.last_command is None else session.last_command.tolist()},

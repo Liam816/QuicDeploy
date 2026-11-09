@@ -205,4 +205,9 @@ def test_live_session_simulated(patched, mode, config_path, model_card):
         # Prefetched requests after the first carry the 10-row RTC prefix.
         # 首块之后的预取请求都带 10 行 RTC 前缀。
         assert any(event["prefix_source_rows"] for event in result.get("queue_request_events", []))
+    events = result["inference_events"]
+    assert len(events) >= len(result["prediction_events"])
+    assert all(event["latency_ms"] > 0 and event["model_ms"] == 100 for event in events)
+    assert all(event["latency_equivalent_hz"] > 0 for event in events)
+    assert [event["sequence"] for event in events] == list(range(1, len(events) + 1))
     assert "error" not in result, result.get("error")

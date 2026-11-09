@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from ..common.io import PROJECT_ROOT, canonical
+from .inference_metrics import InferenceMetrics
 
 
 def prediction_arrays(reply, accepted, request, observation, *, held_verified=False):
@@ -72,6 +73,7 @@ class RunRecorder:
         self._writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="policy-result") if diagnostics else None
         self._writes = []
         self._commands = (self.out / "commands.jsonl").open("w", buffering=1)
+        self.inference_metrics = InferenceMetrics()
 
     @property
     def ik_log(self):
@@ -86,6 +88,10 @@ class RunRecorder:
 
     def record_command(self, row):
         self._commands.write(canonical(row) + "\n")
+
+    def record_inference(self, reply, *, step):
+        event = self.inference_metrics.record(reply, step=step)
+        self.result.setdefault("inference_events", []).append(event)
 
     def save_prediction(self, step, reply, accepted, request, observation, *, held_verified=False):
         self.trajectory_steps[id(accepted.e)] = step
@@ -105,6 +111,7 @@ class RunRecorder:
 
     def finish(self):
         """Flush pending writes and write report.json. / 等待写盘完成并输出 report.json。"""
+        self.inference_metrics.close()
         if self._writer is not None:
             self._writer.shutdown(wait=True, cancel_futures=False)
         for future in self._writes:

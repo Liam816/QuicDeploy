@@ -299,6 +299,7 @@ class LiveSession:
         self.pending_request = request
         self.worker.submit(observation, _context(step, None))
         reply = self.worker.wait(self.exe["max_inference_wait_s"], on_tick=self._check_home)
+        self.rec.record_inference(reply, step=step)
         self.last_reply = reply
         self.observer.sample()
         after_observation, after = self.observer.capture()
@@ -403,6 +404,7 @@ class LiveSession:
         if reply is None:
             return
         request = self.pending_request
+        self.rec.record_inference(reply, step=request.step)
         accepted = self.scheduler.accept(reply["raw"], request, time.monotonic())
         verify_chunk(self.config["motion_limits"], accepted.u.poses, request.anchor)
         self.result["prediction_events"].append({
@@ -459,7 +461,8 @@ class LiveSession:
         """
         if self.pending_request is not None:
             if wait_reply:
-                self.worker.wait(self.exe["max_inference_wait_s"])
+                reply = self.worker.wait(self.exe["max_inference_wait_s"])
+                self.rec.record_inference(reply, step=self.pending_request.step)
             self.next_step = max(self.next_step, self.pending_request.step + 1)
         self.pending_request = self.pending_since = self.pending_observation = None
 

@@ -9,6 +9,7 @@ import numpy as np
 
 from quicdeploy.common.geometry import to6
 from quicdeploy.kinematics.urdf import URDFFK
+from quicdeploy.runtime.inference_metrics import InferenceMetrics
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -91,6 +92,7 @@ def feed(state, replay=None):
         fk = None if replay else URDFFK(ROOT / "configs/hardware/piper_x/piper_bimanual.urdf")
         session_id = uuid.uuid4().hex
         current = previous = None
+        metrics = InferenceMetrics(log=False)
         tick = 0
         while True:
             now = time.monotonic()
@@ -100,12 +102,16 @@ def feed(state, replay=None):
                     current, cameras = replay_prediction(files[(tick // 8) % len(files)], now)
                 else:
                     current = demo_prediction(tick // 8, now, fk)
+                metrics.record({"roundtrip_s": current["roundtrip_ms"] / 1000,
+                                "inference_s": current["inference_ms"] / 1000},
+                               step=current["step"])
             if not replay:
                 cameras = {name: demo_camera(name, tick, now) for name in ("head", "left_wrist", "right_wrist")}
             state.ingest({"session_id": session_id, "source": "replay" if replay else "demo", "status": "offline",
                           "model": Path(replay).name if replay else "Synthetic dual Piper-X",
                           "mode": "replay" if replay else "demo", "control_hz": 0, "policy_hz": 30,
-                          "finished": False, "current": current, "previous": previous, "cameras": cameras,
+                          "finished": False, "inference": metrics.snapshot(),
+                          "current": current, "previous": previous, "cameras": cameras,
                           "robot": {"joints": current["joint_state"], "command": None}})
             tick += 1
             time.sleep(0.125)

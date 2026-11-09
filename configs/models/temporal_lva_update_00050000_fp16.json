@@ -20,8 +20,10 @@
     "../../quicdeploy/policy/lva.py": "dc721a5549b6f3fce8a550169a6f8af184ec246cbe9e3d72a27c74bc67d92417",
     "../../quicdeploy/policy/temporal.py": "a9bfd70422de0c1fdce259ad3aecfa62d81d6802d18a31850ab3971765bed373",
     "../../quicdeploy/robot/piper/camera.py": "0b3f9f08e8ecaace5e353e443c948e9c50dca7a9ef3f1ee970056f94456153d7",
-    "../../quicdeploy/runtime/live.py": "6de1daf99ef88546c4c543b4c769e00a71b455150e0e8e3596b706ddc44c151d",
+    "../../quicdeploy/runtime/inference_metrics.py": "a767ec18d743a4a36e8d152a2b89a75ae4cb3a61d6ec508cc741475719713bda",
+    "../../quicdeploy/runtime/live.py": "d5eb9f5738453b50b4d6b89d5b578d19e5d6374b6a07f31f58ce3ef277b0b5b5",
     "../../quicdeploy/runtime/observer.py": "c75e473fc75efa4c40f3eb6e57a0feac84253ce4b389343efe9ff65260f763b7",
+    "../../quicdeploy/runtime/recorder.py": "4fd0f08bf1a206c32bd3951b371e403d55eb4ed12c46fe525781e9447eda3766",
     "../../third_party/dinov3/LICENSE.md": "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e",
     "../../third_party/dinov3/PROVENANCE.json": "a7eea015a1001d585c506978782a57c47e27a8647e558814762a1211f4e0f26e",
     "../../third_party/dinov3/dinov3/hub/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -128,7 +130,9 @@
       "../../third_party/dinov3/dinov3/utils/dtype.py",
       "../../third_party/dinov3/dinov3/utils/utils.py",
       "../../third_party/dinov3/PROVENANCE.json",
-      "../../third_party/dinov3/LICENSE.md"
+      "../../third_party/dinov3/LICENSE.md",
+      "../../quicdeploy/runtime/recorder.py",
+      "../../quicdeploy/runtime/inference_metrics.py"
     ],
     "normalization": "../../models/quicforge/temporal_lva_update_00050000/normalization.json",
     "output_domain": "physical",

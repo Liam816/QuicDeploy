@@ -8,7 +8,12 @@ document.querySelector('#app').innerHTML = `
   </header>
   <main>
     <section class="intro"><div><p class="eyebrow">DEPLOYMENT OBSERVATORY</p><h1>看见每一次预测<span class="heading-dot">.</span></h1><p id="model" class="muted">等待推理进程接入。原有终端负责机械臂操作。</p></div>
-      <div class="session"><span class="muted">会话状态</span><strong id="status">等待数据</strong><span id="mode" class="mono">—</span></div></section>
+      <div class="session"><div class="session-state"><span class="muted">会话状态</span><strong id="status">等待数据</strong><span id="mode" class="mono">—</span></div>
+        <div class="inference-metrics" aria-label="实时推理性能">
+          <div title="从提交推理请求到主进程收到完整结果，包含 IPC、模型调用及轮询等待"><span>完整推理 latency</span><strong id="inference-latency" class="mono">— ms</strong></div>
+          <div title="最近 5 秒完成的完整推理请求数除以 5，包含调度空闲时间"><span>实测频率 · 近5秒</span><strong id="inference-frequency" class="mono">— Hz</strong></div>
+        </div><p id="inference-detail" class="mono">单次等效 — Hz · 模型调用 — ms</p>
+      </div></section>
     <div id="banner" class="banner" role="status" hidden></div>
     <section class="dashboard" aria-label="相机与三维轨迹">
       <aside class="camera-column"><div class="section-title"><h2>相机画面</h2><span class="mono muted">03 VIEWS</span></div>
@@ -101,7 +106,12 @@ function updateHealth() {
   put('source', source === 'demo' ? '模拟数据 · 无硬件' : source === 'replay' ? '离线回放 · 无硬件' : '只读遥测');
   const statusNames = { waiting: '等待推理', running: '运行中', predicting: '推理中', holding: '保持', paused: '已暂停', passed: '已结束', failed: '异常停止', interrupted: '已中止', offline: '离线预览' };
   put('status', latest ? (statusNames[latest.status] ?? latest.status) : '等待数据');
-  put('mode', latest?.mode ? `${latest.mode.toUpperCase()} / ${latest.policy_hz ?? '—'} Hz` : '—');
+  put('mode', latest?.mode ? `${latest.mode.toUpperCase()} · 动作目标 ${latest.policy_hz ?? '—'} Hz` : '—');
+  const inference = latest?.inference;
+  const metric = (value, places) => Number.isFinite(value) ? value.toFixed(places) : '—';
+  put('inference-latency', `${metric(inference?.latency_ms, 1)} ms`);
+  put('inference-frequency', `${metric(stale || finished ? null : inference?.frequency_hz, 2)} Hz`);
+  put('inference-detail', `单次等效 ${metric(inference?.latency_equivalent_hz, 2)} Hz · 模型调用 ${metric(inference?.model_ms, 1)} ms${finished ? ' · 最后一次' : ''}`);
   if (latest?.model) put('model', latest.model);
   const banner = $('banner');
   const message = latest?.error ? `会话错误：${latest.error}` : finished ? '推理已结束，当前显示最后一份快照。' : offline ?
