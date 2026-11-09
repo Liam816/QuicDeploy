@@ -31,7 +31,20 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
     model_config.pop("weights", None)
     model_config.update(manifest["model_capabilities"]["inference_kwargs"])
     inference = manifest["inference"]
-    validate_inputs(model_config, inference, stats, training, manifest, conversion)
+    temporal = model_config.get("type") == "TemporalLVADecoder"
+    bundle_format = FORMAT
+    sampling = None
+    if temporal:
+        from quicdeploy.config.temporal import FORMAT as TEMPORAL_FORMAT, validate_temporal
+        bundle_format = TEMPORAL_FORMAT
+        sampling = validate_temporal(model_config, inference, stats, training, manifest, conversion)
+        # The deployment owns a frozen official backbone; discard the training server path.
+        model_config["backbone_repo"] = None
+        runtime_path = PROJECT / "configs" / f"{card_stem}.yaml"
+        if runtime_path.exists():
+            raise FileExistsError(f"Temporal runtime already exists: {runtime_path}")
+    else:
+        validate_inputs(model_config, inference, stats, training, manifest, conversion)
     # COMPLETE is absent in the uploaded minimal copy; bind the raw weights by
     # independently checking its transfer digest, not a boolean "all_matched".
     # 上传精简副本可能不含 COMPLETE；读取并独立复算传输哈希，不信任 all_matched 布尔值。
@@ -61,18 +74,24 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
         hashes = {name: sha256(bundle / name) for name in sorted(FILES)}
         if hashes["weights.pt"] != sha256(checkpoint / "backend/model.pt"):
             raise ValueError("Weights changed while copying")
-        deployment = {"schema_version": 1, "format": FORMAT, "files": hashes,
+        deployment = {"schema_version": 1, "format": bundle_format, "files": hashes,
                       "source": {"kind": "quicforge_checkpoint", "directory": str(checkpoint),
                                  "epoch": manifest["epoch"], "global_step": manifest["global_step"],
                                  "input_weights_sha256": hashes["weights.pt"]},
                       "contract": {**PHYSICAL_CONTRACT, "horizon": 50, "action_dt_s": 1 / 30,
                                    "first_target_offset_s": 1 / 30, "fixed_prefix_steps": 10,
                                    "target_contract": TARGET, "history_frames": 1, "camera_map": CAMERA_MAP}}
+        if temporal:
+            deployment["contract"].pop("history_frames")
+            deployment["contract"]["temporal_sampling"] = sampling
         (bundle / "deployment_manifest.json").write_text(json.dumps(deployment, indent=2) + "\n")
         bundle.rename(output)
     backend = PROJECT / "quicdeploy/policy/backends/quicforge_lva"
     code = [backend / name for name in ("__init__.py", "model.py", "decoder.py", "dinov3.py", "task_ids.py", "PROVENANCE.json")]
     code.extend(PROJECT / p for p in ("quicdeploy/policy/quicforge.py", "quicdeploy/policy/lva.py", "quicdeploy/config/quicforge.py"))
+    if temporal:
+        from quicdeploy.config.temporal import code_paths
+        code = code_paths()
     for precision in ("fp32", "fp16"):
         card_path = PROJECT / "configs/models" / f"{card_stem}_{precision}.json"
         if card_path.exists():
@@ -80,7 +99,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
         relative = lambda p: os.path.relpath(p, card_path.parent)
         model = {**PHYSICAL_CONTRACT, "id": f"{card_stem}_{precision}",
                  "name": f"QuicForge Pick Kun Once · Epoch {manifest['epoch']} · Step {manifest['global_step']} · {precision.upper()}",
-                 "architecture": "DINOv3 + FM", "artifact_format": FORMAT,
+                 "architecture": "DINOv3 + FM", "artifact_format": bundle_format,
                  "adapter": "quicdeploy.policy.quicforge:" + ("QuicForgeLVAAdapter" if precision == "fp32" else "QuicForgeLVAFP16Adapter"),
                  "artifact_dir": relative(output), "weights": relative(output / "weights.pt"),
                  "normalization": relative(output / "normalization.json"),
@@ -96,9 +115,22 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
                  "runtime_versions": {"torch": "2.11.0+cu128", "numpy": "2.2.6"},
                  "implementation_files": [relative(output / p) for p in sorted(FILES - {"weights.pt", "normalization.json"})]
                                          + [relative(p) for p in code]}
+        if temporal:
+            model.update(architecture="DINOv3 ViT-B + spatial queries + temporal queries + FM",
+                         temporal_sampling=sampling,
+                         adapter="quicdeploy.policy.temporal:" +
+                                 ("TemporalLVAAdapter" if precision == "fp32" else "TemporalLVAFP16Adapter"))
         card_path.write_text(json.dumps(compact_card({"schema_version": 1, "model": model}), indent=2, ensure_ascii=False) + "\n")
         register(card_path, relative=True)
         print(card_path)
+    if temporal:
+        import yaml
+        runtime = {"schema_version": 2, "extends": "defaults.yaml",
+                   "model": f"models/{card_stem}_fp16.json",
+                   "execution": {"mode": "async", "prefix_steps": 10, "n_action_steps": 40,
+                                 "prefetch_remaining_steps": 23}}
+        runtime_path.write_text(yaml.safe_dump(runtime, sort_keys=False, allow_unicode=True))
+        print(runtime_path)
     return output
 
 

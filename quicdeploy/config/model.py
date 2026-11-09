@@ -43,7 +43,7 @@ DESCRIPTIVE_KEYS = {"name", "architecture", "demo", "dataset_split", "training_s
 MODEL_KEYS = {*REQUIRED_KEYS, "id", "artifact_dir", "artifact_format", "source_dir", "export_metadata",
               "implementation_files", "output_domain", "fixed_prefix_steps", "preproc_sha256", "weights_sha256",
               "runtime_versions", "target_contract", "language", "num_steps", "guidance_scale", "noise_std",
-              "weights_variant", "weight_dtype", "layerscale_dtype"}
+              "weights_variant", "weight_dtype", "layerscale_dtype", "temporal_sampling"}
 LVA_ADAPTERS = {
     "quicdeploy.policy.lva:" + name: precision for name, precision in (
         ("LVAAdapter", "float32"), ("LVAFP16Adapter", "float16"),
@@ -51,6 +51,8 @@ LVA_ADAPTERS = {
 }
 LVA_ADAPTERS.update({"quicdeploy.policy.quicforge:QuicForgeLVAAdapter": "float32",
                      "quicdeploy.policy.quicforge:QuicForgeLVAFP16Adapter": "float16"})
+LVA_ADAPTERS.update({"quicdeploy.policy.temporal:TemporalLVAAdapter": "float32",
+                     "quicdeploy.policy.temporal:TemporalLVAFP16Adapter": "float16"})
 
 
 def adapter_defaults(adapter):
@@ -171,6 +173,16 @@ def validate_model(model):
         code |= {Path(__file__).parents[1] / p for p in ("policy/quicforge.py", "policy/lva.py", "config/quicforge.py")}
         if not {str(p.resolve()) for p in code} <= set(artifact_paths(model)):
             raise ValueError("QuicForge model card must pin adapter and frozen network code")
+    if model.get("adapter", "").startswith("quicdeploy.policy.temporal:") and model.get("artifact_format") != "quicforge_temporal_lva_v1":
+        raise ValueError("Temporal adapter requires quicforge_temporal_lva_v1")
+    if model.get("artifact_format") == "quicforge_temporal_lva_v1":
+        from .temporal import load_bundle, code_paths
+
+        bundle = load_bundle(model, verify_hashes=False)
+        expected = {str(p.resolve()) for p in (*bundle["paths"].values(), *code_paths())}
+        expected.add(str(Path(model["export_metadata"]).resolve()))
+        if not expected <= set(artifact_paths(model)):
+            raise ValueError("Temporal card must pin all bundle members and inference code")
 
 
 def resolved_model(model, owner):

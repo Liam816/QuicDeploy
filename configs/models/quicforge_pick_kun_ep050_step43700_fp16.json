@@ -15,7 +15,7 @@
     "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
     "../../quicdeploy/policy/backends/quicforge_lva/model.py": "dcf2b11caa7d7be35425a09487dca09741edb68f89fdc9d0a84e88dad87d7ec1",
     "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
-    "../../quicdeploy/policy/lva.py": "3625273c083d27cb224f2e355efd8fac8f16d8c47fddd2dd6ae5584cdc2809fa",
+    "../../quicdeploy/policy/lva.py": "dc721a5549b6f3fce8a550169a6f8af184ec246cbe9e3d72a27c74bc67d92417",
     "../../quicdeploy/policy/quicforge.py": "e79a0f9c01728025e0cd2a6b52ec57ce7239fcbd61f68d8fdc6fc161f5b65436"
   },
   "metadata": {

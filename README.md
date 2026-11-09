@@ -35,6 +35,9 @@ Rotating Box（epoch50 / step38000）专用配置：`configs/lva_rotating_box_ep
 适配器、文件组织、FP32/FP16 卡和离线验证见 [QuicForge 部署](docs/quicforge_deployment.md)。
 新模型只通过该薄启动器或 `--model` 显式选择，共用 runtime.yaml，原默认模型不变。
 
+Temporal-LVA（历史 vision token 队列、训练帧率采样、当前帧启动 padding、FP32/FP16）见
+[时序模型部署](docs/temporal_lva_deployment.md)。导入器自动识别模型结构并生成独立时序配置。
+
 ## 链路 / Pipeline
 
 ```

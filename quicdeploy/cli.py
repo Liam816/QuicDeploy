@@ -51,7 +51,15 @@ def cmd_infer(config, args):
             context = {"seed": 0, "episode": 0, "anchor_index": step,
                        "rng": np.random.default_rng(np.random.SeedSequence([0, step])), "prefix_absolute": prefix}
             started = time.monotonic()
-            worker.submit({"images": images, "eef_state": anchor, "timestamp": 0.0}, context)
+            observation = {"images": images, "eef_state": anchor, "timestamp": 0.0}
+            if config["model"].get("temporal_sampling"):
+                sampling = config["model"]["temporal_sampling"]
+                count, stride = sampling["history_frames"], sampling["history_stride"]
+                observation["vision_history"] = {
+                    "session": "offline-current-padding", "frame_index": 0, "first_frame_index": 0,
+                    "time_offsets": list(range(-(count - 1) * stride, 1, stride)),
+                    "samples": [{"frame_index": 0, "images": images}] * count}
+            worker.submit(observation, context)
             reply = worker.wait(config["execution"]["max_inference_wait_s"])
             raw = reply["raw"]
             print(canonical({"repeat": index, "roundtrip_s": time.monotonic() - started,

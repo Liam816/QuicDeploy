@@ -238,8 +238,11 @@ def resolve(config_path, *, model_card=None):
     model = dict(card["model"], device=settings["runtime"]["device"], cpu_threads=settings["runtime"]["cpu_threads"])
 
     hardware = load_hardware(resolve_path(raw["hardware"], path), sources)
-    if model.get("artifact_format") == "quicforge_lva_v1":
-        from .quicforge import load_bundle
+    if model.get("artifact_format") in ("quicforge_lva_v1", "quicforge_temporal_lva_v1"):
+        if model["artifact_format"] == "quicforge_temporal_lva_v1":
+            from .temporal import load_bundle
+        else:
+            from .quicforge import load_bundle
 
         conversion = load_bundle(model, verify_hashes=False)["conversion"]
         if conversion["kinematics"].get("urdf_sha256") != sha256(hardware["kinematics"]["urdf"]):

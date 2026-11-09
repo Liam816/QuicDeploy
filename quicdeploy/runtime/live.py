@@ -259,6 +259,8 @@ class LiveSession:
             if "resume" not in keys:
                 time.sleep(self.tick_dt)
                 return
+            if self.config["model"].get("temporal_sampling"):
+                self._new_queue()
             self.paused = False
             print("Resuming policy from fresh observation; old queue and RTC prefix discarded.", flush=True)
         self._check_home()
@@ -279,7 +281,11 @@ class LiveSession:
         Used for every sync chunk and for the first async/RTC chunk.
         用于 sync 的每一块，以及 async/RTC 的第一块。
         """
-        observation, before = self.observer.capture()
+        while not self.observer.prediction_ready():
+            self._check_home()
+            self.observer.sample()
+            time.sleep(self.tick_dt)
+        observation, before = self.observer.capture(for_prediction=True)
         if bootstrap:
             self.policy_origin = observation["timestamp"]
         step = self.next_step
@@ -342,7 +348,8 @@ class LiveSession:
         self._poll_reply()
         poll_done = time.monotonic()
         request_parts = None
-        if self.pending_request is None and self.scheduler.should_request(time.monotonic()):
+        if (self.pending_request is None and self.scheduler.should_request(time.monotonic())
+                and self.observer.prediction_ready()):
             request_parts = self._submit_request(poll_done)
         request_done = time.monotonic()
         if request_parts is not None:
@@ -411,7 +418,7 @@ class LiveSession:
         采集观测、构造（RTC）请求并非阻塞提交。
         """
         step = self.next_step
-        observation, _ = self.observer.capture()
+        observation, _ = self.observer.capture(for_prediction=True)
         capture_done = time.monotonic()
         try:
             request = self.scheduler.prepare(step, observation["timestamp"], observation["eef_state"],
@@ -422,7 +429,7 @@ class LiveSession:
             # 绝不伪造前缀：先保持、丢弃旧队列，再用新观测发起无前缀的普通请求。
             self._hold()
             self.scheduler.restart_rtc()
-            observation, _ = self.observer.capture()
+            observation, _ = self.observer.capture(for_prediction=True)
             request = self.scheduler.prepare(step, observation["timestamp"], observation["eef_state"],
                                              requested_at=time.monotonic())
             self.rec.append("rtc_restart_events", {"step": step, "reason": str(miss)})

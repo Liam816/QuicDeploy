@@ -12,6 +12,7 @@ Timestamps use time.monotonic(), the clock used by the whole control loop.
 import logging
 import math
 import time
+from collections import deque
 from threading import Event, Lock, Thread
 
 import cv2
@@ -38,6 +39,15 @@ class OpenCVCamera:
         self.latest_frame = None
         self.latest_timestamp = None
         self.new_frame_event = Event()
+        self.frame_index = -1
+        self.frame_history = deque(maxlen=1)
+
+    def enable_history(self, capacity):
+        """Start a fresh acquisition window, retaining only the latest current frame."""
+        with self.frame_lock:
+            self.frame_history = deque(maxlen=capacity)
+            if self.latest_frame is not None and self.latest_timestamp is not None:
+                self.frame_history.append((self.frame_index, self.latest_timestamp, self.latest_frame))
 
     def __str__(self):
         return f"OpenCVCamera({self.index_or_path})"
@@ -127,8 +137,10 @@ class OpenCVCamera:
                 frame = self._postprocess(raw)
                 stamp = time.monotonic()
                 with self.frame_lock:
+                    self.frame_index += 1
                     self.latest_frame = frame
                     self.latest_timestamp = stamp
+                    self.frame_history.append((self.frame_index, stamp, frame))
                 self.new_frame_event.set()
                 failure_count = 0
             except _Disconnected:

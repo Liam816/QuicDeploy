@@ -135,9 +135,12 @@ class LVAAdapter(PolicyAdapter):
             views.append(crop)
         return np.ascontiguousarray(np.concatenate(views, axis=1).transpose(2, 0, 1)[None])
 
+    def _image_input(self, observation):
+        return self.torch.from_numpy(self.preprocess(observation["images"])).to(self.config["device"])
+
     def infer(self, observation, context):
         torch, c = self.torch, self.config
-        image = torch.from_numpy(self.preprocess(observation["images"])).to(c["device"])
+        image = self._image_input(observation)
         # Deterministic CPU-generated noise, identical to offline evaluation.
         # 在 CPU 上用确定性种子生成噪声，与离线评测完全一致。
         seed = (int(context.get("seed", 0)) * 1000003
