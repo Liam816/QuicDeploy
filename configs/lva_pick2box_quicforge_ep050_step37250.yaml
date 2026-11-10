@@ -1,0 +1,9 @@
+# Single-frame action-GT pick2box, epoch50/step37250, FP16.
+# 单帧 action-GT pick2box，epoch50/step37250，FP16。
+schema_version: 2
+extends: defaults.yaml
+model: models/lva_pick2box_quicforge_ep050_step37250_fp16.json
+execution:
+  # Reserve 20/30 seconds for async inference; shared RTC and guards are inherited.
+  # 预留 20/30 秒用于异步推理；RTC 和指令保护继承公共配置。
+  prefetch_remaining_steps: 20

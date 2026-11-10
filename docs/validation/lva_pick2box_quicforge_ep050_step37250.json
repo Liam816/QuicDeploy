@@ -1,0 +1,131 @@
+{
+  "verified_date": "2026-11-10",
+  "base_commit": "3372e43",
+  "status": "passed",
+  "model_id": "lva_pick2box_quicforge_ep050_step37250_fp16",
+  "runtime_fingerprint": "28039bb16acc44fc649b150380892f1e88769d89dd9b225796c398ffa7a6302d",
+  "source_upload": "/home/ih/heping/checkpoints/lva_pick2box_action_gt_full_50ep_quicforge_20261023",
+  "source_files_sha256_verified": 18,
+  "checkpoint": {
+    "name": "update_00037250",
+    "epoch": 50,
+    "global_step": 37250,
+    "weights_sha256": "7f8f5418d89cfa4c30d51e0d224ec532925ae9bfef3c104b2cb4230ac7200f5c",
+    "weights_variant": "model"
+  },
+  "conversion_sources": [
+    "lerobot_20261021_164001_251169",
+    "lerobot_20261021_164745_250005"
+  ],
+  "execution": {
+    "policy_overclock_enabled": false,
+    "mode": "async",
+    "prefix_steps": 10,
+    "control_hz": 50,
+    "n_action_steps": 40,
+    "prefetch_remaining_steps": 20,
+    "handoff_margin_s": 0.011,
+    "max_inference_wait_s": 15.0,
+    "max_tick_lateness_s": 0.02,
+    "late_policy": "hold",
+    "policy_hz": 30.0
+  },
+  "tests": {
+    "targeted_passed": 82,
+    "full_passed": 118,
+    "command": "python -m pytest -q tests webviz/tests"
+  },
+  "independent_reference": {
+    "reference": "Original QuicForge network and evaluator functions on deployment-local task recordings",
+    "torch": "2.11.0+cu130",
+    "numpy": "2.2.6",
+    "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "checkpoint_weights_sha256": "7f8f5418d89cfa4c30d51e0d224ec532925ae9bfef3c104b2cb4230ac7200f5c",
+    "source_sha256": {
+      "models/lva/model.py": "608af1afe23fd328c27a4000de9a251a4f4b605cf03e3fc18b3dcf1a008cac6d",
+      "models/lva/decoder.py": "8b44a5182275ba0f5d7288579dc9d393034517908e1f1b14f46552090db30ea3",
+      "models/lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+      "models/lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+      "data/lva/dataset.py": "105687be4c02294a33f5a95995a2ea2385a1d70819bf2bd57cff5d2d8c54ee50",
+      "evaluation/lva_episode.py": "17130716f509538310babfa2ff8fbced3ac05b90513328c6f3883ef5ff715067",
+      "data/lva/datamodule.py": "d7920175679de7a9e2ee89ef441b5164e6a2a8ab9dc7e30423047a21c5452cc1"
+    },
+    "dataset": "/home/ih/workspace/yihuigou/openarm_workspace/data/lerobot_20261027_144156",
+    "samples": [
+      {
+        "file": "episode000_frame0000.npz",
+        "frame": 0,
+        "sha256": "bd4d68b70cb9b2ee44bf4e8dd833768670eadd14ee0ef9cdcf997ec2d5588c0a",
+        "rtc_prefix_source": "same-anchor no-prefix prediction rows 25:35"
+      },
+      {
+        "file": "episode000_frame0040.npz",
+        "frame": 40,
+        "sha256": "cecd79e789b067ecbfdf727ccd751bd1c5f672a2ea836ab0b66fc4b87a628e78",
+        "rtc_prefix_source": "same-anchor no-prefix prediction rows 25:35"
+      },
+      {
+        "file": "episode000_frame0080.npz",
+        "frame": 80,
+        "sha256": "933d48f2b7d151bdb42dc48dbb56a652620fbd15790bfac34b43efc08fc2061b",
+        "rtc_prefix_source": "same-anchor no-prefix prediction rows 25:35"
+      }
+    ]
+  },
+  "numerical_validation": {
+    "cases": 12,
+    "fp32_max_abs_component": 0.0,
+    "preprocess_max_abs_difference": 0.0,
+    "fp16_max_difference": {
+      "position_mm": 0.1783053729575205,
+      "rotation_deg": 0.0266939831626447,
+      "gripper_mm": 0.6112288129307117
+    },
+    "thresholds": {
+      "fp32": {
+        "position_mm": 0.05,
+        "rotation_deg": 0.02,
+        "gripper_mm": 0.05
+      },
+      "fp16": {
+        "position_mm": 1.0,
+        "rotation_deg": 0.5,
+        "gripper_mm": 1.0
+      }
+    },
+    "fp16_absolute_prefix_max_abs_difference": 3.3306690738754696e-16
+  },
+  "software_ik_commands": 195,
+  "spawn_worker": {
+    "rtc_repeats": 3,
+    "direct_adapter_output_array_equal": true,
+    "absolute_prefix_max_abs_difference": 2.220446049250313e-16,
+    "inference_s": [
+      0.5178555710008368,
+      0.2409336399869062,
+      0.24078588100383058
+    ],
+    "roundtrip_s": [
+      0.5246099859941751,
+      0.24574194999877363,
+      0.24559817096451297
+    ]
+  },
+  "launcher_check": "passed with stale model/config overrides cleared",
+  "hardware_presence": "two 1 Mbps CAN interfaces and 3 cameras",
+  "preservation": {
+    "status": "passed",
+    "existing_cards_checked": [
+      "lva_update_00100000_fp32",
+      "quicforge_pick_kun_ep050_step43700_fp16",
+      "temporal_lva_update_00050000_fp32",
+      "lva_update_00100000_fp16",
+      "quicforge_pick_kun_ep050_step43700_fp32",
+      "temporal_lva_update_00050000_fp16"
+    ],
+    "user_yaml_preserved": true,
+    "physical_commands_sent": 0
+  },
+  "physical_commands_sent": 0,
+  "detailed_report": "outputs/lva-pick2box-37250-validation/report.json"
+}

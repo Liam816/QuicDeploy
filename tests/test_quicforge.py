@@ -188,6 +188,30 @@ def test_resolve_rejects_training_deployment_urdf_mismatch(bundle, tmp_path, mon
         resolver.resolve(PROJECT_ROOT / "configs/runtime.yaml", model_card=card)
 
 
+@pytest.mark.parametrize("change,match", [
+    ("missing", "cover every training dataset"), ("order", "dataset identity"),
+    ("fps", "dataset physical contract.fps"), ("urdf", "dataset physical contract.kinematics"),
+    ("units", "dataset physical contract.pose_labels"), ("duplicate", "Duplicate training dataset"),
+])
+def test_multidataset_metadata_cannot_hide_mismatch(bundle, change, match):
+    config, root, values = bundle
+    training = copy.deepcopy(values["provenance/training_config.json"])
+    training["data"]["datasets"].append({"label_file": "/data/second_kvdb/label.pkl"})
+    first = copy.deepcopy(values["provenance/conversion_meta.json"])
+    second = copy.deepcopy(first); second["source_dataset"] = "/data/second"
+    conversion = {**first, "dataset_sources": [first, second]}
+    if change == "missing": conversion.pop("dataset_sources")
+    if change == "order": conversion["dataset_sources"] = [second, first]
+    if change == "fps": second["fps"] = 60
+    if change == "urdf": second["kinematics"]["urdf_sha256"] = "different"
+    if change == "units": second["pose_labels"]["gripper_unit"] = "meters"
+    if change == "duplicate": training["data"]["datasets"][1] = training["data"]["datasets"][0]
+    write(root / "provenance/training_config.json", training)
+    write(root / "provenance/conversion_meta.json", conversion)
+    with pytest.raises(ValueError, match=match):
+        load_bundle(config, verify_hashes=False)
+
+
 def test_v2_card_roundtrip_preserves_contract_and_artifact_pins(bundle, tmp_path):
     from quicdeploy.config.model import compact_card, expand_model
     config, _, _ = bundle

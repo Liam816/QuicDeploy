@@ -1,0 +1,105 @@
+{
+  "artifacts": {
+    "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/deployment_manifest.json": "ffdffe9c0324eff1ada940e1279066de0b12706ead2ef1aa948fd9ce8c7cb208",
+    "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/inference_config.json": "a81e9713bae7e36e0b6af91cd1c916441662633b12faf0501bbfc83b722b5dbc",
+    "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/model_config.json": "ea8f8d95c33fded10ad9406550e0d117145bda65309859cd4000008752a90c68",
+    "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/normalization.json": "853027bd48883a1039b1de23156ad0d6c5828092842e38c9aa9b9248248f29b4",
+    "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/provenance/checkpoint.json": "e2265072e3f8635359abf528d05519a8b5bb8ae6d4a8e5adbbbc7781409e4b96",
+    "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/provenance/conversion_meta.json": "8ceb00ab486a5a6d760d7979462bf14c8d5ef974ad687647d7dea2fda148fdc9",
+    "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/provenance/training_config.json": "2bcba401be09987ba61c4332c6db40eb15bdc6a34e982f731afa5b4767361e72",
+    "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/weights.pt": "7f8f5418d89cfa4c30d51e0d224ec532925ae9bfef3c104b2cb4230ac7200f5c",
+    "../../quicdeploy/config/quicforge.py": "7d28de533a381576de6fed6df903b882c949e46c3e1942d37ce6c6d7ba4f872a",
+    "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "768ba0ef808022861f0d4d7b236d4f70d7325ea7e5f324df9bb5e599e8f5cdf1",
+    "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
+    "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "4b945dd90894179a8ef9f0bac5591168b4703f040461afa7c9b52416ee460afe",
+    "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+    "../../quicdeploy/policy/backends/quicforge_lva/model.py": "dcf2b11caa7d7be35425a09487dca09741edb68f89fdc9d0a84e88dad87d7ec1",
+    "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+    "../../quicdeploy/policy/lva.py": "dc721a5549b6f3fce8a550169a6f8af184ec246cbe9e3d72a27c74bc67d92417",
+    "../../quicdeploy/policy/quicforge.py": "e79a0f9c01728025e0cd2a6b52ec57ce7239fcbd61f68d8fdc6fc161f5b65436"
+  },
+  "metadata": {
+    "architecture": "DINOv3 + FM",
+    "checkpoint": {
+      "epoch": 50,
+      "global_step": 37250
+    },
+    "dataset_split": "training_replay",
+    "demo": false,
+    "name": "lva_pick2box_action_gt_full_50ep_quicforge_20261023 · Epoch 50 · Step 37250 · FP32"
+  },
+  "model": {
+    "action_dt_s": 0.03333333333333333,
+    "adapter": "quicdeploy.policy.quicforge:QuicForgeLVAAdapter",
+    "artifact_dir": "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250",
+    "artifact_format": "quicforge_lva_v1",
+    "cameras": [
+      "left_wrist",
+      "head",
+      "right_wrist"
+    ],
+    "ends": {
+      "left": "left_Link6",
+      "right": "right_Link6"
+    },
+    "export_metadata": "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/deployment_manifest.json",
+    "fixed_prefix_steps": 10,
+    "frame": "world",
+    "gripper_unit": "mm",
+    "horizon": 50,
+    "id": "lva_pick2box_quicforge_ep050_step37250_fp32",
+    "implementation_files": [
+      "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/inference_config.json",
+      "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/model_config.json",
+      "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/provenance/checkpoint.json",
+      "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/provenance/conversion_meta.json",
+      "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/provenance/training_config.json",
+      "../../quicdeploy/policy/backends/quicforge_lva/__init__.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/model.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/decoder.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json",
+      "../../quicdeploy/policy/quicforge.py",
+      "../../quicdeploy/policy/lva.py",
+      "../../quicdeploy/config/quicforge.py"
+    ],
+    "normalization": "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/normalization.json",
+    "output_domain": "physical",
+    "position_unit": "m",
+    "preprocessing": {
+      "crop": [
+        16,
+        16,
+        448,
+        608
+      ],
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "protocol": "eef20_relative",
+    "rotation": "columns6d",
+    "runtime_versions": {
+      "numpy": "2.2.6",
+      "torch": "2.11.0+cu128"
+    },
+    "supervision": "action",
+    "target_contract": {
+      "anchor_pose_source": "state",
+      "first_target_offset_steps": 1,
+      "pose_source": "action"
+    },
+    "timing_domain": "stored_recording_time",
+    "weights": "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/weights.pt",
+    "weights_sha256": "7f8f5418d89cfa4c30d51e0d224ec532925ae9bfef3c104b2cb4230ac7200f5c"
+  },
+  "schema_version": 2
+}

@@ -20,25 +20,34 @@ from quicdeploy.config.quicforge import CAMERA_MAP, FILES, FORMAT, PREPROCESSING
 
 
 def import_source(input_dir, checkpoint_name, conversion_meta):
-    """Read an original run or a verified flat download without rewriting either.
-    读取原始训练目录或经过哈希校验的平铺下载目录，不修改上传原件。
+    """Read a run, flat checkpoint or verified official export without rewriting it.
+    读取训练目录、平铺断点或已校验的官方导出包，不修改上传原件。
     """
     source = Path(input_dir).resolve()
-    flat = (source / "checkpoint_manifest.json").is_file()
-    checkpoint = source if flat else source / "checkpoints" / checkpoint_name
-    paths = {"weights": checkpoint / ("model.pt" if flat else "backend/model.pt"),
+    conversions = ([conversion_meta] if isinstance(conversion_meta, (str, Path)) else list(conversion_meta))
+    if not conversions:
+        raise ValueError("At least one conversion metadata source is required")
+    conversions = [Path(p).resolve() for p in conversions]
+    exported = (source / "weights.pt").is_file() and (source / "manifest.json").is_file()
+    flat = not exported and (source / "checkpoint_manifest.json").is_file()
+    portable = flat or exported
+    checkpoint = source if portable else source / "checkpoints" / checkpoint_name
+    paths = {"weights": checkpoint / ("weights.pt" if exported else "model.pt" if flat else "backend/model.pt"),
              "normalization": checkpoint / ("normalization.json" if flat else "assets/normalization.json"),
-             "checkpoint": checkpoint / ("checkpoint_manifest.json" if flat else "manifest.json"),
-             "training": source / "config.resolved.json", "conversion": Path(conversion_meta).resolve()}
-    for path in paths.values():
+             "checkpoint": checkpoint / ("checkpoint_manifest.json" if portable else "manifest.json"),
+             "training": source / "config.resolved.json", "conversion": conversions[0]}
+    for path in [*paths.values(), *conversions]:
         if not path.is_file():
             raise ValueError(f"Missing QuicForge import asset: {path}")
-    provenance = {"kind": "quicforge_flat_checkpoint" if flat else "quicforge_checkpoint",
+    provenance = {"kind": "quicforge_export" if exported else "quicforge_flat_checkpoint" if flat else "quicforge_checkpoint",
                   "directory": str(checkpoint)}
-    if flat:
-        transfer = load_json(source / "download_manifest.json")
+    if portable:
+        transfer_path = source / ("download_sources.json" if exported else "download_manifest.json")
+        transfer = load_json(transfer_path)
+        entries = ([{**info, "name": name} for name, info in transfer["files"].items()]
+                   if exported else transfer["files"])
         verified = set()
-        for entry in transfer["files"]:
+        for entry in entries:
             name = Path(entry["name"])
             file = (source / name).resolve()
             if name.is_absolute() or ".." in name.parts or not file.is_relative_to(source) or file in verified:
@@ -46,20 +55,36 @@ def import_source(input_dir, checkpoint_name, conversion_meta):
             if file.stat().st_size != entry["bytes"] or sha256(file) != entry["sha256"]:
                 raise ValueError(f"Downloaded asset changed: {name}")
             verified.add(file)
-        required = {*paths.values(), source / "model_config.json", source / "inference_config.json"}
+        required = {*paths.values(), *conversions, source / "model_config.json", source / "inference_config.json"}
+        if exported:
+            required |= {source / "manifest.json", source / "assets/preproc.pt"}
         if not {p.resolve() for p in required} <= verified:
             raise ValueError("Flat download manifest must pin all import assets")
-        provenance["transfer_manifest_sha256"] = sha256(source / "download_manifest.json")
+        provenance["transfer_manifest_sha256"] = sha256(transfer_path)
     training, manifest = load_json(paths["training"]), load_json(paths["checkpoint"])
-    if flat:
+    if portable:
         require(manifest.get("name"), checkpoint_name, "flat checkpoint name")
         encoded = json.dumps(training, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
         require(hashlib.sha256(encoded.encode()).hexdigest(), manifest.get("config_hash"), "training config hash")
         provenance["config_hash"] = manifest["config_hash"]
+    if exported:
+        # The export must identify this checkpoint and retain its original model
+        # weights. A transfer success flag alone does not establish either fact.
+        # 导出包必须绑定本断点及原始 model 权重，不能仅凭传输成功标记确认身份。
+        export = load_json(source / "manifest.json")
+        require(export.get("format_version"), 1, "export format")
+        require(export.get("weights"), "weights.pt", "export weights path")
+        require(export.get("weights_sha256"), sha256(paths["weights"]), "export weights hash")
+        require(export.get("dtypes"), ["float32"], "export reference dtype")
+        require(export.get("assets"), ["normalization.json", "preproc.pt"], "export assets")
+        for key, expected in (("global_step", manifest["global_step"]), ("config_hash", manifest["config_hash"]),
+                              ("weights", "model")):
+            require(export.get("source", {}).get(key), expected, "export source." + key)
+        provenance["export_manifest_sha256"] = sha256(source / "manifest.json")
     model_config = dict(manifest["model"])
     model_config.pop("weights", None)
     model_config.update(manifest["model_capabilities"]["inference_kwargs"])
-    if flat:
+    if portable:
         require(load_json(source / "model_config.json"), model_config, "flat exported model config")
         require(load_json(source / "inference_config.json"), manifest["inference"], "flat exported inference config")
     if model_config.get("type") in ("LVADecoder", "TemporalLVADecoder") and "backbone_flash_attention" in model_config:
@@ -75,9 +100,18 @@ def import_source(input_dir, checkpoint_name, conversion_meta):
 
 
 def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
-    source, paths, training, manifest, model_config, provenance = import_source(input_dir, checkpoint_name, conversion_meta)
+    conversions = ([conversion_meta] if isinstance(conversion_meta, (str, Path)) else list(conversion_meta))
+    if not conversions:
+        raise ValueError("At least one conversion metadata source is required")
+    source, paths, training, manifest, model_config, provenance = import_source(input_dir, checkpoint_name, conversions)
     stats = load_json(paths["normalization"])
-    conversion = load_json(paths["conversion"])
+    metadata = [load_json(Path(p)) for p in conversions]
+    conversion = dict(metadata[0])
+    if len(metadata) > 1:
+        # Preserve every dataset's original metadata inside one pinned bundle
+        # member; top-level physical fields retain the existing runtime API.
+        # 在同一受哈希约束的文件中保留各数据集原始元数据，顶层物理字段兼容现有运行接口。
+        conversion["dataset_sources"] = metadata
     inference = manifest["inference"]
     temporal = model_config.get("type") == "TemporalLVADecoder"
     bundle_format = FORMAT
@@ -114,9 +148,12 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
         shutil.copyfile(paths["weights"], bundle / "weights.pt")
         shutil.copyfile(paths["normalization"], bundle / "normalization.json")
         for source_file, destination in ((paths["training"], "training_config.json"),
-                                         (paths["checkpoint"], "checkpoint.json"),
-                                         (paths["conversion"], "conversion_meta.json")):
+                                         (paths["checkpoint"], "checkpoint.json")):
             shutil.copyfile(source_file, bundle / "provenance" / destination)
+        if len(metadata) == 1:
+            shutil.copyfile(paths["conversion"], bundle / "provenance/conversion_meta.json")
+        else:
+            (bundle / "provenance/conversion_meta.json").write_text(json.dumps(conversion, indent=2) + "\n")
         for name, value in (("model_config.json", model_config), ("inference_config.json", inference)):
             (bundle / name).write_text(json.dumps(value, indent=2) + "\n")
         hashes = {name: sha256(bundle / name) for name in sorted(FILES)}
@@ -146,7 +183,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
             raise FileExistsError(f"Refusing to overwrite model card: {card_path}")
         relative = lambda p: os.path.relpath(p, card_path.parent)
         model = {**PHYSICAL_CONTRACT, "id": f"{card_stem}_{precision}",
-                 "name": f"QuicForge Pick Kun Once · Epoch {manifest['epoch']} · Step {manifest['global_step']} · {precision.upper()}",
+                 "name": f"{training.get('experiment', {}).get('name', card_stem)} · Epoch {manifest['epoch']} · Step {manifest['global_step']} · {precision.upper()}",
                  "architecture": "DINOv3 + FM", "artifact_format": bundle_format,
                  "adapter": "quicdeploy.policy.quicforge:" + ("QuicForgeLVAAdapter" if precision == "fp32" else "QuicForgeLVAFP16Adapter"),
                  "artifact_dir": relative(output), "weights": relative(output / "weights.pt"),
@@ -187,7 +224,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="original run or verified flat download / 原始训练目录或已校验平铺资产")
     parser.add_argument("--checkpoint", default="update_00043700")
-    parser.add_argument("--conversion-meta", required=True, type=Path)
+    parser.add_argument("--conversion-meta", required=True, type=Path, action="append",
+                        help="repeat in training dataset order / 按训练数据集顺序重复指定")
     parser.add_argument("--output", type=Path, default=PROJECT / "models/quicforge/pick_kun_once_e50_bs20")
     parser.add_argument("--card-stem", default="quicforge_pick_kun_ep050_step43700")
     args = parser.parse_args()

@@ -83,12 +83,23 @@ def validate_inputs(model_config, inference, stats, training, checkpoint, conver
         require(labels.get(key), value, key)
     require(conversion["camera_map"], {"observation.images.head": "top",
             "observation.images.left_wrist": "left_wrist", "observation.images.right_wrist": "right_wrist"}, "camera map")
-    # Tie the data identity to training, not just to a coincidentally identical URDF.
-    # 数据身份必须与训练配置关联，不能只看 URDF 恰好相同。
-    data_id = Path(training["data"]["datasets"][0]["label_file"]).parent.name
-    require(data_id, Path(conversion["source_dataset"]).name + "_kvdb", "dataset identity")
-    if len(training["data"]["datasets"]) != 1:
-        raise ValueError("This importer requires a single explicit conversion metadata source")
+    # Bind every training dataset to its own metadata and require identical
+    # physical semantics. Keep the original single-dataset representation valid.
+    # 每个训练数据集分别绑定转换元数据并核对物理语义一致，兼容原单数据集文件格式。
+    datasets = training["data"]["datasets"]
+    sources = conversion.get("dataset_sources", [conversion])
+    if not isinstance(sources, list) or not sources or len(sources) != len(datasets):
+        raise ValueError("Conversion metadata must cover every training dataset in order")
+    require(conversion.get("source_dataset"), sources[0].get("source_dataset"), "primary dataset identity")
+    identities = set()
+    for dataset, metadata in zip(datasets, sources, strict=True):
+        data_id = Path(dataset["label_file"]).parent.name
+        if data_id in identities:
+            raise ValueError("Duplicate training dataset identity: " + data_id)
+        identities.add(data_id)
+        require(data_id, Path(metadata["source_dataset"]).name + "_kvdb", "dataset identity")
+        for key in ("schema_version", "source_robot_type", "robot_profile", "fps", "kinematics", "pose_labels", "camera_map"):
+            require(metadata.get(key), conversion.get(key), "dataset physical contract." + key)
 
 
 def load_bundle(config, *, verify_hashes=True):

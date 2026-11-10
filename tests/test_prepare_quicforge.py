@@ -196,3 +196,84 @@ def test_single_frame_attention_mismatch_is_not_ignored(flat_lva):
     pin(flat_lva)
     with pytest.raises(ValueError, match="training attention implementation"):
         import_source(flat_lva, "update_00100000", flat_lva / "conversion_meta.json")
+
+
+def pin_export(root):
+    files = {str(p.relative_to(root)): {"bytes": p.stat().st_size, "sha256": sha256(p)}
+             for p in root.rglob("*") if p.is_file() and p.name != "download_sources.json"}
+    write(root / "download_sources.json", {"files": files})
+
+
+@pytest.fixture
+def official_export(flat_lva):
+    root = flat_lva
+    (root / "model.pt").rename(root / "weights.pt")
+    (root / "assets").mkdir()
+    (root / "normalization.json").rename(root / "assets/normalization.json")
+    (root / "assets/preproc.pt").write_bytes(b"paired preprocessing fixture")
+    (root / "download_manifest.json").unlink()
+    training = json.loads((root / "config.resolved.json").read_text())
+    training["data"]["datasets"].append({"label_file": "/data/second_kvdb/label.pkl"})
+    checkpoint = json.loads((root / "checkpoint_manifest.json").read_text())
+    checkpoint["config_hash"] = hashlib.sha256(json.dumps(training, sort_keys=True, ensure_ascii=False,
+                                                           separators=(",", ":")).encode()).hexdigest()
+    second = json.loads((root / "conversion_meta.json").read_text())
+    second["source_dataset"] = "/data/second"
+    for name, value in (("config.resolved.json", training), ("checkpoint_manifest.json", checkpoint),
+                        ("provenance/second/conversion_meta.json", second)):
+        write(root / name, value)
+    write(root / "manifest.json", {"format_version": 1, "weights": "weights.pt",
+        "weights_sha256": sha256(root / "weights.pt"), "dtypes": ["float32"],
+        "assets": ["normalization.json", "preproc.pt"],
+        "source": {"global_step": checkpoint["global_step"], "config_hash": checkpoint["config_hash"], "weights": "model"}})
+    pin_export(root)
+    return root
+
+
+def test_official_export_import_and_multidataset_bundle(official_export, tmp_path, monkeypatch):
+    import tools.prepare_quicforge as importer
+    from quicdeploy.common.io import PROJECT_ROOT
+    root = official_export
+    before = {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    conversions = [root / "conversion_meta.json", root / "provenance/second/conversion_meta.json"]
+    _, paths, _, _, _, provenance = import_source(root, "update_00100000", conversions)
+    assert paths["weights"] == root / "weights.pt"
+    assert provenance["kind"] == "quicforge_export" and provenance["export_manifest_sha256"] == sha256(root / "manifest.json")
+    project = tmp_path / "export_deploy"
+    (project / "configs/models").mkdir(parents=True)
+    (project / "quicdeploy").symlink_to(PROJECT_ROOT / "quicdeploy", target_is_directory=True)
+    monkeypatch.setattr(importer, "PROJECT", project)
+    output = project / "models/export"
+    prepare(root, "update_00100000", conversions, output, "multi_lva")
+    metadata = json.loads((output / "provenance/conversion_meta.json").read_text())
+    assert metadata["dataset_sources"] == [json.loads(p.read_text()) for p in conversions]
+    for precision in ("fp32", "fp16"):
+        assert load_model_card(project / f"configs/models/multi_lva_{precision}.json")["model"]["global_step"] == 100000
+    assert sha256(output / "weights.pt") == sha256(root / "weights.pt")
+    assert before == {str(p.relative_to(root)): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("change,match", [
+    ("hash", "export weights hash"), ("step", "export source.global_step"),
+    ("ema", "export source.weights"), ("dtype", "export reference dtype"),
+    ("unpinned", "must pin all import assets"), ("changed_metadata", "Downloaded asset changed"),
+    ("traversal", "Invalid/duplicate"),
+])
+def test_official_export_rejects_mismatch_and_unpinned_metadata(official_export, change, match):
+    root = official_export
+    conversions = [root / "conversion_meta.json", root / "provenance/second/conversion_meta.json"]
+    exported = json.loads((root / "manifest.json").read_text())
+    if change == "hash": exported["weights_sha256"] = "wrong"
+    if change == "step": exported["source"]["global_step"] = 1
+    if change == "ema": exported["source"]["weights"] = "ema"
+    if change == "dtype": exported["dtypes"] = ["bfloat16"]
+    if change in ("hash", "step", "ema", "dtype"):
+        write(root / "manifest.json", exported); pin_export(root)
+    if change == "changed_metadata": conversions[1].write_text("{}")
+    if change in ("unpinned", "traversal"):
+        transfer = json.loads((root / "download_sources.json").read_text())
+        if change == "unpinned": del transfer["files"]["provenance/second/conversion_meta.json"]
+        if change == "traversal": transfer["files"]["../outside"] = {"bytes": 0, "sha256": "wrong"}
+        write(root / "download_sources.json", transfer)
+    with pytest.raises(ValueError, match=match):
+        import_source(root, "update_00100000", conversions)
