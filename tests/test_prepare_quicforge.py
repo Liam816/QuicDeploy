@@ -277,3 +277,64 @@ def test_official_export_rejects_mismatch_and_unpinned_metadata(official_export,
         write(root / "download_sources.json", transfer)
     with pytest.raises(ValueError, match=match):
         import_source(root, "update_00100000", conversions)
+
+
+@pytest.fixture
+def aggregated_flat(flat_lva):
+    root = flat_lva
+    training = json.loads((root / "config.resolved.json").read_text())
+    training["data"]["datasets"].append({"label_file": "/data/second_kvdb/label.pkl"})
+    checkpoint = json.loads((root / "checkpoint_manifest.json").read_text())
+    checkpoint["config_hash"] = hashlib.sha256(json.dumps(training, sort_keys=True, ensure_ascii=False,
+                                                           separators=(",", ":")).encode()).hexdigest()
+    first = json.loads((root / "conversion_meta.json").read_text())
+    second = copy.deepcopy(first); second["source_dataset"] = "/data/second"
+    conversion = {**first, "quicforge_primary_source": 0, "quicforge_sources": [
+        {"label_file": dataset["label_file"], "metadata_available": True, "metadata": metadata}
+        for dataset, metadata in zip(training["data"]["datasets"], (first, second), strict=True)]}
+    for name, value in (("config.resolved.json", training), ("checkpoint_manifest.json", checkpoint),
+                        ("conversion_meta.json", conversion)):
+        write(root / name, value)
+    pin(root)
+    return root
+
+
+def test_aggregated_conversion_preserves_sources_and_registers_cards(aggregated_flat, tmp_path, monkeypatch):
+    import tools.prepare_quicforge as importer
+    from quicdeploy.common.io import PROJECT_ROOT
+    source = aggregated_flat / "conversion_meta.json"
+    original = source.read_bytes()
+    project = tmp_path / "aggregated_deploy"
+    (project / "configs/models").mkdir(parents=True)
+    (project / "quicdeploy").symlink_to(PROJECT_ROOT / "quicdeploy", target_is_directory=True)
+    monkeypatch.setattr(importer, "PROJECT", project)
+    output = project / "models/aggregated"
+    prepare(aggregated_flat, "update_00100000", source, output, "aggregate")
+    bundle = json.loads((output / "provenance/conversion_meta.json").read_text())
+    assert bundle["quicforge_sources"] == json.loads(original)["quicforge_sources"]
+    assert bundle["dataset_sources"] == [entry["metadata"] for entry in bundle["quicforge_sources"]]
+    assert source.read_bytes() == original
+    for precision in ("fp32", "fp16"):
+        assert load_model_card(project / f"configs/models/aggregate_{precision}.json")["model"]["global_step"] == 100000
+
+
+@pytest.mark.parametrize("change,match", [
+    ("count", "cover every training dataset"), ("primary", "primary source"),
+    ("bool_primary", "primary source"), ("missing", "metadata is missing"),
+    ("order", "dataset order"), ("urdf", "dataset physical contract.kinematics"),
+])
+def test_aggregated_conversion_rejects_incomplete_or_inconsistent_sources(aggregated_flat, tmp_path, change, match):
+    source = aggregated_flat / "conversion_meta.json"
+    conversion = json.loads(source.read_text())
+    entries = conversion["quicforge_sources"]
+    if change == "count": entries.pop()
+    if change == "primary": conversion["quicforge_primary_source"] = 1
+    if change == "bool_primary": conversion["quicforge_primary_source"] = False
+    if change == "missing": entries[1]["metadata_available"] = False
+    if change == "order": entries.reverse()
+    if change == "urdf": entries[1]["metadata"]["kinematics"]["urdf_sha256"] = "different"
+    write(source, conversion); pin(aggregated_flat)
+    output = tmp_path / "rejected_bundle"
+    with pytest.raises(ValueError, match=match):
+        prepare(aggregated_flat, "update_00100000", source, output, "rejected")
+    assert not output.exists()

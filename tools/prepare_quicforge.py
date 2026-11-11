@@ -107,7 +107,26 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
     stats = load_json(paths["normalization"])
     metadata = [load_json(Path(p)) for p in conversions]
     conversion = dict(metadata[0])
-    if len(metadata) > 1:
+    aggregated = "quicforge_sources" in conversion
+    if aggregated:
+        # A downloaded aggregate keeps every source in training order. Validate
+        # the embedded identities before exposing the existing bundle contract.
+        # 下载的汇总文件按训练顺序保留各源；先校验内嵌身份，再转换为既有部署契约。
+        if len(metadata) != 1:
+            raise ValueError("Use one aggregated conversion file or separate per-dataset files")
+        entries = conversion["quicforge_sources"]
+        datasets = training["data"]["datasets"]
+        if not isinstance(entries, list) or not entries or len(entries) != len(datasets):
+            raise ValueError("Aggregated conversion metadata must cover every training dataset")
+        primary = conversion.get("quicforge_primary_source")
+        if type(primary) is not int or primary != 0:
+            raise ValueError("Aggregated conversion primary source must be index 0")
+        for entry, dataset in zip(entries, datasets, strict=True):
+            if entry.get("metadata_available") is not True or not isinstance(entry.get("metadata"), dict):
+                raise ValueError("Aggregated conversion source metadata is missing")
+            require(entry.get("label_file"), dataset["label_file"], "aggregated conversion dataset order")
+        metadata = [entry["metadata"] for entry in entries]
+    if len(metadata) > 1 or aggregated:
         # Preserve every dataset's original metadata inside one pinned bundle
         # member; top-level physical fields retain the existing runtime API.
         # 在同一受哈希约束的文件中保留各数据集原始元数据，顶层物理字段兼容现有运行接口。
@@ -150,7 +169,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
         for source_file, destination in ((paths["training"], "training_config.json"),
                                          (paths["checkpoint"], "checkpoint.json")):
             shutil.copyfile(source_file, bundle / "provenance" / destination)
-        if len(metadata) == 1:
+        if len(metadata) == 1 and not aggregated:
             shutil.copyfile(paths["conversion"], bundle / "provenance/conversion_meta.json")
         else:
             (bundle / "provenance/conversion_meta.json").write_text(json.dumps(conversion, indent=2) + "\n")

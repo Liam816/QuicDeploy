@@ -1,0 +1,136 @@
+{
+  "verified_date": "2026-11-11",
+  "base_commit": "e3d03b0",
+  "status": "passed",
+  "model_id": "lva_pick2box_1027_quicforge_ep050_step117150_fp16",
+  "runtime_fingerprint": "6f063b01e5b339bc4ca90b0fec9a61df289c4976c8762c2ab3b6b285ca70be93",
+  "source_upload": "/home/ih/heping/checkpoints/pick2box_action_gt_full_50ep_1027_quicforge",
+  "source_files_sha256_verified": 8,
+  "checkpoint": {
+    "name": "update_00117150",
+    "epoch": 50,
+    "global_step": 117150,
+    "weights_sha256": "0246295f5d41f40f494cad683ff36dbdc2cf661ff8b9e556466354f3600091f8",
+    "weights_variant": "model"
+  },
+  "training": {
+    "datasets": 5,
+    "episodes": 155,
+    "frames": 63981,
+    "global_batch": 24
+  },
+  "execution": {
+    "policy_overclock_enabled": false,
+    "mode": "async",
+    "prefix_steps": 10,
+    "control_hz": 50,
+    "n_action_steps": 40,
+    "prefetch_remaining_steps": 15,
+    "handoff_margin_s": 0.011,
+    "max_inference_wait_s": 15.0,
+    "max_tick_lateness_s": 0.02,
+    "late_policy": "hold",
+    "policy_hz": 30.0
+  },
+  "tests": {
+    "targeted_passed": 58,
+    "full_passed": 125,
+    "command": "python -m pytest -q tests webviz/tests"
+  },
+  "independent_reference": {
+    "reference": "Original QuicForge network and evaluator functions on deployment-local task recordings",
+    "torch": "2.11.0+cu130",
+    "numpy": "2.2.6",
+    "device": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "checkpoint_weights_sha256": "0246295f5d41f40f494cad683ff36dbdc2cf661ff8b9e556466354f3600091f8",
+    "source_sha256": {
+      "models/lva/model.py": "608af1afe23fd328c27a4000de9a251a4f4b605cf03e3fc18b3dcf1a008cac6d",
+      "models/lva/decoder.py": "8b44a5182275ba0f5d7288579dc9d393034517908e1f1b14f46552090db30ea3",
+      "models/lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+      "models/lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+      "data/lva/dataset.py": "105687be4c02294a33f5a95995a2ea2385a1d70819bf2bd57cff5d2d8c54ee50",
+      "evaluation/lva_episode.py": "17130716f509538310babfa2ff8fbced3ac05b90513328c6f3883ef5ff715067",
+      "data/lva/datamodule.py": "d7920175679de7a9e2ee89ef441b5164e6a2a8ab9dc7e30423047a21c5452cc1"
+    },
+    "dataset": "/home/ih/workspace/yihuigou/openarm_workspace/data/lerobot_20261027_144156",
+    "samples": [
+      {
+        "file": "episode000_frame0000.npz",
+        "frame": 0,
+        "sha256": "ebf7f3d8b7a0ea32b77bd6cecb251e7ff9f47ef70993174acf44e5774be43338",
+        "rtc_prefix_source": "same-anchor no-prefix prediction rows 25:35"
+      },
+      {
+        "file": "episode000_frame0040.npz",
+        "frame": 40,
+        "sha256": "e185730d61655581db093205f79221752e2a727549e4d13797b26af789903dc3",
+        "rtc_prefix_source": "same-anchor no-prefix prediction rows 25:35"
+      },
+      {
+        "file": "episode000_frame0080.npz",
+        "frame": 80,
+        "sha256": "d76529914eea1f4d6501b42915189348fcafa3b76c3d44632b6a074b20973099",
+        "rtc_prefix_source": "same-anchor no-prefix prediction rows 25:35"
+      }
+    ]
+  },
+  "numerical_validation": {
+    "cases": 12,
+    "thresholds": {
+      "fp32": {
+        "position_mm": 0.05,
+        "rotation_deg": 0.02,
+        "gripper_mm": 0.05
+      },
+      "fp16": {
+        "position_mm": 1.0,
+        "rotation_deg": 0.5,
+        "gripper_mm": 1.0
+      }
+    },
+    "fp32_max_abs_component": 0.0,
+    "preprocess_max_abs_difference": 0.0,
+    "fp16_max_difference": {
+      "position_mm": 0.20559363215920737,
+      "rotation_deg": 0.03129462267441979,
+      "gripper_mm": 0.028574201723884585
+    },
+    "fp16_absolute_prefix_max_abs_difference": 2.7755575615628914e-16
+  },
+  "software_ik_commands": 195,
+  "spawn_worker": {
+    "rtc_repeats": 3,
+    "direct_adapter_output_array_equal": true,
+    "absolute_prefix_max_abs_difference": 2.220446049250313e-16,
+    "inference_s": [
+      0.5164192329975776,
+      0.24005342402961105,
+      0.24097869702382013
+    ],
+    "roundtrip_s": [
+      0.5223254560260102,
+      0.2447894630022347,
+      0.24487224902259186
+    ]
+  },
+  "launcher_check": "passed with stale model/config overrides cleared",
+  "hardware_presence": "two 1 Mbps CAN interfaces and 3 cameras",
+  "preservation": {
+    "status": "passed",
+    "existing_config_script_files_preserved": 33,
+    "runtime_sections_equal_to_legacy1027": [
+      "execution",
+      "postprocess",
+      "observation",
+      "guard",
+      "hold",
+      "motion_limits",
+      "kinematics"
+    ],
+    "normalization_equal_to_legacy1027": true,
+    "physical_commands_sent": 0
+  },
+  "physical_commands_sent": 0,
+  "detailed_report": "outputs/pick2box-1027-quicforge-117150-validation/report.json",
+  "preproc_normalization_pair_verified": true
+}

@@ -1,0 +1,5 @@
+# QuicForge 1027 epoch50/step117150, FP16; same runtime policy as legacy 1027.
+# QuicForge 1027 模型，epoch50/step117150、FP16；调度参数与旧 1027 保持一致。
+schema_version: 2
+extends: defaults.yaml
+model: models/lva_pick2box_1027_quicforge_ep050_step117150_fp16.json
