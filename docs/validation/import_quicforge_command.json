@@ -1,0 +1,37 @@
+{
+  "verified_date": "2026-11-11",
+  "base_commit": "793c668",
+  "status": "passed",
+  "tests": {
+    "full_passed": 145,
+    "targeted_passed": 49,
+    "command": "python -m pytest -q tests webviz/tests"
+  },
+  "real_model_checkpoint": "update_00117150",
+  "source_files": 8,
+  "source_integrity": "local_baseline_created",
+  "source_directory_unchanged": true,
+  "existing_config_script_hashes_preserved": 37,
+  "generated_fp16_fp32_cards": true,
+  "generated_profile_and_launcher": true,
+  "duplicate_import_rejected_without_mutation": true,
+  "spawn_repeats": 2,
+  "spawn_output_array_equal_to_existing_model": true,
+  "launcher_check": "passed from /tmp with stale model/config variables; two CAN interfaces and three cameras present",
+  "temporal_real_source_dry_run": {
+    "status": "passed",
+    "sampling": {
+      "history_frames": 16,
+      "history_stride": 8,
+      "window_stride": 1,
+      "source_fps": 30,
+      "padding": "current",
+      "history_time_units": "video_frames",
+      "anchor_alignment": "history_stride"
+    }
+  },
+  "physical_commands_sent": 0,
+  "detailed_report": "outputs/import_command_validation/report.json",
+  "temporary_smoke_model_removed": true,
+  "source_output_overlap_rejected": true
+}

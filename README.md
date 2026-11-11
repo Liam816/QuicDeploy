@@ -40,6 +40,16 @@ Temporal-LVA（历史 vision token 队列、训练帧率采样、当前帧启动
 已接入 `update_00050000`：配置 `configs/temporal_lva_update_00050000.yaml`，
 启动检查 `bash scripts/start_temporal_lva_50000.sh --check`；值守运行 `bash scripts/start_temporal_lva_50000.sh --run`。
 
+后续上传相同八文件结构的 QuicForge checkpoint 后，可自动生成模型卡、独立推理配置和启动脚本：
+
+```bash
+bash scripts/import_quicforge_model_ckpt.sh /home/ih/heping/checkpoints/你的模型目录
+# 可选 --name pick2box_v2 / --precision fp32；仅预览使用 --dry-run。
+```
+
+自动读取训练名、epoch/step，默认 FP16，拒绝覆盖已有模型；导入期间不连接机械臂。
+输入约定、完整性基线及模型卡 `artifacts` 的说明见 [自动导入模型](docs/import_quicforge.md)。
+
 ## 链路 / Pipeline
 
 ```

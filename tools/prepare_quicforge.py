@@ -19,7 +19,7 @@ from quicdeploy.config.model import PHYSICAL_CONTRACT, compact_card, register
 from quicdeploy.config.quicforge import CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET, require, validate_inputs
 
 
-def import_source(input_dir, checkpoint_name, conversion_meta):
+def import_source(input_dir, checkpoint_name, conversion_meta, *, transfer_manifest=None):
     """Read a run, flat checkpoint or verified official export without rewriting it.
     读取训练目录、平铺断点或已校验的官方导出包，不修改上传原件。
     """
@@ -42,7 +42,8 @@ def import_source(input_dir, checkpoint_name, conversion_meta):
     provenance = {"kind": "quicforge_export" if exported else "quicforge_flat_checkpoint" if flat else "quicforge_checkpoint",
                   "directory": str(checkpoint)}
     if portable:
-        transfer_path = source / ("download_sources.json" if exported else "download_manifest.json")
+        transfer_path = (Path(transfer_manifest).resolve() if transfer_manifest is not None else
+                         source / ("download_sources.json" if exported else "download_manifest.json"))
         transfer = load_json(transfer_path)
         entries = ([{**info, "name": name} for name, info in transfer["files"].items()]
                    if exported else transfer["files"])
@@ -61,6 +62,7 @@ def import_source(input_dir, checkpoint_name, conversion_meta):
         if not {p.resolve() for p in required} <= verified:
             raise ValueError("Flat download manifest must pin all import assets")
         provenance["transfer_manifest_sha256"] = sha256(transfer_path)
+        provenance["transfer_manifest_kind"] = transfer.get("kind", "provided_manifest")
     training, manifest = load_json(paths["training"]), load_json(paths["checkpoint"])
     if portable:
         require(manifest.get("name"), checkpoint_name, "flat checkpoint name")
@@ -99,11 +101,12 @@ def import_source(input_dir, checkpoint_name, conversion_meta):
     return source, paths, training, manifest, model_config, provenance
 
 
-def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
+def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, transfer_manifest=None, dry_run=False):
     conversions = ([conversion_meta] if isinstance(conversion_meta, (str, Path)) else list(conversion_meta))
     if not conversions:
         raise ValueError("At least one conversion metadata source is required")
-    source, paths, training, manifest, model_config, provenance = import_source(input_dir, checkpoint_name, conversions)
+    source, paths, training, manifest, model_config, provenance = import_source(
+        input_dir, checkpoint_name, conversions, transfer_manifest=transfer_manifest)
     stats = load_json(paths["normalization"])
     metadata = [load_json(Path(p)) for p in conversions]
     conversion = dict(metadata[0])
@@ -160,6 +163,9 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem):
             raise FileExistsError(f"Model card already exists for {card_stem}_{precision}")
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite deployment bundle: {output}")
+    if dry_run:
+        return {"model_type": model_config["type"], "epoch": manifest["epoch"],
+                "global_step": manifest["global_step"], "temporal_sampling": sampling}
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".quicforge-import-", dir=output.parent) as tmp:
         bundle = Path(tmp) / "bundle"
