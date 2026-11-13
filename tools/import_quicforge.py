@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import fcntl
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -28,30 +29,24 @@ def json_file(path, value):
     path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def model_name(source, requested):
+def model_name(source, directory_name):
     checkpoint = load_json(source / "checkpoint_manifest.json")
     for key in ("epoch", "global_step"):
         if type(checkpoint.get(key)) is not int or checkpoint[key] < 0:
             raise ValueError("Checkpoint requires a nonnegative integer " + key)
     if not isinstance(checkpoint.get("name"), str) or not checkpoint["name"]:
         raise ValueError("Checkpoint requires its original name")
-    if requested is None:
-        experiment = load_json(source / "config.resolved.json").get("experiment", {}).get("name", source.name)
-        if not isinstance(experiment, str):
-            raise ValueError("experiment.name must be a string")
-        base = re.sub(r"[^a-z0-9]+", "_", experiment.lower()).strip("_") or "quicforge_model"
-        if not base[0].isalpha():
-            base = "model_" + base
-        requested = f"{base[:90]}_ep{checkpoint['epoch']:03d}_step{checkpoint['global_step']}"
-    if not re.fullmatch(r"[a-z][a-z0-9_]{0,127}", requested):
-        raise ValueError("--name must be 1..128 lowercase letters/digits/underscores, starting with a letter")
-    return requested, checkpoint
+    # Keep the supplied directory name verbatim. Reject unsafe names rather than
+    # silently lowercasing, truncating or appending checkpoint/precision suffixes.
+    # 原样保留传入目录名；不安全的名字直接拒绝，不改大小写、截断或拼接断点/精度后缀。
+    if not re.fullmatch(r"\w[\w.-]*", directory_name) or len(directory_name.encode("utf-8")) > 240:
+        raise ValueError("Checkpoint directory name must use letters/digits/underscore/dot/hyphen (max 240 UTF-8 bytes)")
+    return directory_name, checkpoint
 
 
 def targets(name):
     return {"bundle": PROJECT / "models/quicforge" / name,
-            "fp32_card": PROJECT / f"configs/models/{name}_fp32.json",
-            "fp16_card": PROJECT / f"configs/models/{name}_fp16.json",
+            "card": PROJECT / f"configs/models/{name}.json",
             "config": PROJECT / f"configs/{name}.yaml",
             "launcher": PROJECT / f"scripts/start_{name}.sh",
             "receipt": PROJECT / "outputs/imports" / name}
@@ -60,7 +55,7 @@ def targets(name):
 def check_destinations(paths):
     for path in paths.values():
         if path.exists() or path.is_symlink():
-            raise FileExistsError(f"Already exists, refusing to overwrite: {path}; use another --name")
+            raise FileExistsError(f"Already exists, refusing to overwrite: {path}; choose another checkpoint directory name")
 
 
 @contextmanager
@@ -109,15 +104,16 @@ exec bash "$ROOT/scripts/start_live.sh" "$@"
 ''' % name
 
 
-def run_import(input_dir, *, name=None, precision="fp16", dry_run=False):
+def run_import(input_dir, *, precision="fp16", dry_run=False):
     if precision not in ("fp16", "fp32"):
         raise ValueError("Precision must be fp16 or fp32")
+    supplied = Path(os.path.abspath(Path(input_dir).expanduser()))
     source = Path(input_dir).expanduser().resolve()
     for filename in INPUT_FILES:
         path = source / filename
         if not path.is_file() or path.is_symlink():
             raise ValueError(f"Missing/linked checkpoint file: {path}")
-    name, checkpoint = model_name(source, name)
+    name, checkpoint = model_name(source, supplied.name)
     paths = targets(name)
     for destination in paths.values():
         canonical = destination.resolve()
@@ -129,7 +125,8 @@ def run_import(input_dir, *, name=None, precision="fp16", dry_run=False):
         manifest_bytes = manifest.read_bytes()
         manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
         inspection = importer.prepare(source, checkpoint["name"], source / "conversion_meta.json",
-                                      paths["bundle"], name, transfer_manifest=manifest, dry_run=True)
+                                      paths["bundle"], name, transfer_manifest=manifest, dry_run=True,
+                                      card_precision=precision)
         plan = {"name": name, "source": str(source), "precision": precision,
                 "checkpoint": checkpoint["name"], **inspection, "source_integrity": integrity,
                 "paths": {key: str(path) for key, path in paths.items()},
@@ -144,7 +141,7 @@ def run_import(input_dir, *, name=None, precision="fp16", dry_run=False):
             check_destinations(paths)
             try:
                 importer.prepare(source, checkpoint["name"], source / "conversion_meta.json",
-                                 paths["bundle"], name, transfer_manifest=manifest)
+                                 paths["bundle"], name, transfer_manifest=manifest, card_precision=precision)
                 if sha256(manifest) != manifest_hash:
                     raise ValueError("Source manifest changed during import")
                 inputs = {item["name"]: item for item in json.loads(manifest_bytes)["files"]}
@@ -157,7 +154,7 @@ def run_import(input_dir, *, name=None, precision="fp16", dry_run=False):
                     raise ValueError("Checkpoint weights changed during import")
                 import yaml
                 profile = {"schema_version": 2, "extends": "defaults.yaml",
-                           "model": f"models/{name}_{precision}.json"}
+                           "model": f"models/{name}.json"}
                 if inspection["temporal_sampling"]:
                     profile["execution"] = {"prefetch_remaining_steps": 23}
                 paths["config"].write_text("# Generated model profile / 自动生成的模型配置\n" +
@@ -185,12 +182,11 @@ def run_import(input_dir, *, name=None, precision="fp16", dry_run=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkpoint_dir", type=Path)
-    parser.add_argument("--name", help="optional output stem / 可选的模型命名")
     parser.add_argument("--precision", choices=("fp16", "fp32"), default="fp16")
     parser.add_argument("--dry-run", action="store_true", help="validate and preview only / 只校验和预览")
     args = parser.parse_args()
     try:
-        result = run_import(args.checkpoint_dir, name=args.name, precision=args.precision, dry_run=args.dry_run)
+        result = run_import(args.checkpoint_dir, precision=args.precision, dry_run=args.dry_run)
     except (OSError, ValueError, KeyError, RuntimeError) as exc:
         parser.exit(1, f"Import failed / 导入失败: {exc}\n")
     print(json.dumps(result, indent=2, ensure_ascii=False))

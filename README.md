@@ -44,10 +44,11 @@ Temporal-LVA（历史 vision token 队列、训练帧率采样、当前帧启动
 
 ```bash
 bash scripts/import_quicforge_model_ckpt.sh /home/ih/heping/checkpoints/你的模型目录
-# 可选 --name pick2box_v2 / --precision fp32；仅预览使用 --dry-run。
+# 可选 --precision fp32；仅预览使用 --dry-run。
 ```
 
-自动读取训练名、epoch/step，默认 FP16，拒绝覆盖已有模型；导入期间不连接机械臂。
+直接使用传入 ckpt 目录名，生成同名 JSON、YAML 和 start_<目录名>.sh，不追加 epoch、step 或精度后缀。
+默认 FP16，仅生成所选精度的一张模型卡，拒绝覆盖已有模型；导入期间不连接机械臂。
 输入约定、完整性基线及模型卡 `artifacts` 的说明见 [自动导入模型](docs/import_quicforge.md)。
 
 ## 链路 / Pipeline

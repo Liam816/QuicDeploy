@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Import an uploaded checkpoint; no robot connection or motion.
 # 导入上传的 checkpoint，不连接或运动机械臂。
-#   bash scripts/import_quicforge_model_ckpt.sh /path/to/checkpoint [--name my_model] [--dry-run]
+#   bash scripts/import_quicforge_model_ckpt.sh /path/to/checkpoint [--dry-run]
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/conda_env.sh"

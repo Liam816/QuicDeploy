@@ -1,0 +1,39 @@
+{
+  "verified_date": "2026-11-13",
+  "base_commit": "90b391a",
+  "status": "passed",
+  "tests": {
+    "targeted_passed": 54,
+    "full_passed": 150,
+    "command": "python -m pytest -q tests webviz/tests"
+  },
+  "input_directory_name": "DirectoryNaming-Smoke_117150",
+  "generated_names": {
+    "bundle": "DirectoryNaming-Smoke_117150",
+    "card": "DirectoryNaming-Smoke_117150.json",
+    "config": "DirectoryNaming-Smoke_117150.yaml",
+    "launcher": "start_DirectoryNaming-Smoke_117150.sh",
+    "receipt": "DirectoryNaming-Smoke_117150"
+  },
+  "single_json_card": true,
+  "model_id_equals_directory_name": true,
+  "checkpoint_metadata_preserved": {
+    "epoch": 50,
+    "global_step": 117150
+  },
+  "legacy_two_precision_prepare_api_preserved": true,
+  "precision_selection": "one card; fp16/fp32 selected by content, never filename suffix",
+  "spawn_repeats": 2,
+  "output_array_equal_to_existing_model": true,
+  "launcher_check": "passed from /tmp with stale config/model environment variables; no motion",
+  "existing_config_scripts_preserved": 41,
+  "preexisting_untracked_user_files_preserved": [
+    "configs/models/pick_kun_once_iter10w_bs6_4gpu_ep164_step120000_fp16.json",
+    "configs/models/pick_kun_once_iter10w_bs6_4gpu_ep164_step120000_fp32.json",
+    "configs/pick_kun_once_iter10w_bs6_4gpu_ep164_step120000.yaml",
+    "scripts/start_pick_kun_once_iter10w_bs6_4gpu_ep164_step120000.sh"
+  ],
+  "physical_commands_sent": 0,
+  "temporary_test_model_removed": true,
+  "detailed_examples": "outputs/directory_naming_validation/generated_examples"
+}

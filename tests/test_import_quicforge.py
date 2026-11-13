@@ -42,7 +42,9 @@ def project(tmp_path, monkeypatch):
     return root
 
 
-def complete(source, *, manifest=True):
+def complete(source, *, manifest=True, name=None):
+    if name is not None:
+        source = source.rename(source.with_name(name))
     (source / "preproc.pt").write_bytes(b"preprocessing fixture")
     pin(source)
     if not manifest:
@@ -51,49 +53,54 @@ def complete(source, *, manifest=True):
 
 
 def test_import_without_manifest_preserves_originals_and_pins_artifacts(project, flat_lva):
-    source = complete(flat_lva, manifest=False)
+    source = complete(flat_lva, manifest=False, name="new_pick2box")
     before = snapshot(source)
-    result = workflow.run_import(source, name="new_pick2box")
+    result = workflow.run_import(source)
     paths = workflow.targets(result["name"])
     assert result["status"] == "passed" and result["hardware_connected"] is False
     assert result["source_integrity"] == "local_baseline_created"
     assert snapshot(source) == before
-    assert yaml.safe_load(paths["config"].read_text())["model"] == "models/new_pick2box_fp16.json"
+    assert yaml.safe_load(paths["config"].read_text())["model"] == "models/new_pick2box.json"
     assert 'unset QUICDEPLOY_MODEL' in paths["launcher"].read_text()
     assert paths["launcher"].stat().st_mode & 0o111
     inventory = paths["receipt"] / "source_manifest.json"
     assert json.loads(inventory.read_text())["kind"] == "local_observed_baseline"
     bundle = json.loads((paths["bundle"] / "deployment_manifest.json").read_text())
     assert bundle["source"]["transfer_manifest_sha256"] == sha256(inventory)
-    for precision in ("fp16", "fp32"):
-        card = load_model_card(paths[precision + "_card"])
-        assert card["model"]["global_step"] == 100000
-        assert all(not Path(p).is_absolute() for p in json.loads(paths[precision + "_card"].read_text())["artifacts"])
+    card = load_model_card(paths["card"])
+    assert card["model"]["global_step"] == 100000 and card["model"]["id"] == source.name
+    assert card["model"]["weight_dtype"] == "float16"
+    assert list((project / "configs/models").glob("*.json")) == [paths["card"]]
+    assert all(not Path(p).is_absolute() for p in json.loads(paths["card"].read_text())["artifacts"])
 
 
-def test_aggregate_and_fp32_selection(project, aggregated_flat):
-    source = complete(aggregated_flat)
-    result = workflow.run_import(source, name="multi_source", precision="fp32")
+@pytest.mark.parametrize("precision", ["fp16", "fp32"])
+def test_aggregate_and_precision_selection_keep_one_unsuffixed_card(project, aggregated_flat, precision):
+    source = complete(aggregated_flat, name="multi_source")
+    result = workflow.run_import(source, precision=precision)
     assert result["source_integrity"] == "provided_manifest_verified"
     paths = workflow.targets(result["name"])
-    assert yaml.safe_load(paths["config"].read_text())["model"].endswith("_fp32.json")
+    assert yaml.safe_load(paths["config"].read_text())["model"] == "models/multi_source.json"
+    assert load_model_card(paths["card"])["model"]["weight_dtype"] == ("float16" if precision == "fp16" else "float32")
+    assert list((project / "configs/models").glob("*.json")) == [paths["card"]]
     assert len(json.loads((paths["bundle"] / "provenance/conversion_meta.json").read_text())["dataset_sources"]) == 2
 
 
 def test_temporal_preserves_training_stride_and_uses_temporal_prefetch(project, flat):
-    source = complete(flat)
-    result = workflow.run_import(source, name="temporal_pick", precision="fp32")
+    source = complete(flat, name="Temporal-Pick")
+    result = workflow.run_import(source, precision="fp32")
     paths = workflow.targets(result["name"])
     profile = yaml.safe_load(paths["config"].read_text())
     assert profile["execution"] == {"prefetch_remaining_steps": 23}
-    assert profile["model"].endswith("_fp32.json")
-    model = load_model_card(paths["fp32_card"])["model"]
+    assert profile["model"] == "models/Temporal-Pick.json"
+    model = load_model_card(paths["card"])["model"]
+    assert model["id"] == "Temporal-Pick" and model["weight_dtype"] == "float32"
     assert model["temporal_sampling"]["history_stride"] == 8
     assert not model.get("allow_history_stride_override", False)
 
 
-def test_dry_run_validates_and_names_from_metadata_without_outputs(project, flat_lva):
-    source = complete(flat_lva, manifest=False)
+def test_dry_run_uses_directory_name_instead_of_experiment_and_checkpoint_suffixes(project, flat_lva):
+    source = complete(flat_lva, manifest=False, name="Pick2Box_1027-Run.2")
     training = json.loads((source / "config.resolved.json").read_text())
     training["experiment"] = {"name": "My Pick2Box-中文"}
     checkpoint = json.loads((source / "checkpoint_manifest.json").read_text())
@@ -103,25 +110,30 @@ def test_dry_run_validates_and_names_from_metadata_without_outputs(project, flat
     (source / "checkpoint_manifest.json").write_text(json.dumps(checkpoint))
     before, project_before = snapshot(source), snapshot(project)
     result = workflow.run_import(source, dry_run=True)
-    assert result["name"] == "my_pick2box_ep132_step100000" and result["status"] == "dry_run"
+    assert result["name"] == source.name and result["status"] == "dry_run"
+    assert result["epoch"] == 132 and result["global_step"] == 100000
+    assert Path(result["paths"]["card"]).name == source.name + ".json"
+    assert Path(result["paths"]["config"]).name == source.name + ".yaml"
+    assert Path(result["paths"]["launcher"]).name == f"start_{source.name}.sh"
     assert snapshot(source) == before and snapshot(project) == project_before
     assert not (project / "outputs").exists()
 
 
-@pytest.mark.parametrize("name", ["../escape", "x$(touch_pwn)", "9bad"])
-def test_rejects_unsafe_names_before_creating_outputs(project, flat_lva, name):
-    with pytest.raises(ValueError, match="--name"):
-        workflow.run_import(complete(flat_lva), name=name)
+@pytest.mark.parametrize("name", ["x$(touch_pwn)", 'bad"name', "bad name"])
+def test_rejects_unsafe_directory_names_before_creating_outputs(project, flat_lva, name):
+    source = complete(flat_lva, name=name)
+    with pytest.raises(ValueError, match="directory name"):
+        workflow.run_import(source)
     assert not (project / "models").exists()
 
 
-@pytest.mark.parametrize("key", ["bundle", "fp16_card", "config", "launcher", "receipt"])
+@pytest.mark.parametrize("key", ["bundle", "card", "config", "launcher", "receipt"])
 def test_existing_output_is_never_overwritten(project, flat_lva, key):
-    source = complete(flat_lva)
+    source = complete(flat_lva, name="existing")
     path = workflow.targets("existing")[key]
     path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b"existing owner")
     with pytest.raises(FileExistsError, match="refusing to overwrite"):
-        workflow.run_import(source, name="existing")
+        workflow.run_import(source)
     assert path.read_bytes() == b"existing owner"
 
 
@@ -129,7 +141,7 @@ def test_provided_manifest_cannot_be_silently_rebaselined(project, flat_lva):
     source = complete(flat_lva)
     (source / "model.pt").write_bytes(b"replacement")
     with pytest.raises(ValueError, match="Downloaded asset changed"):
-        workflow.run_import(source, name="changed")
+        workflow.run_import(source)
     assert not (project / "models").exists()
 
 
@@ -139,37 +151,37 @@ def test_manifest_must_cover_preproc_too(project, flat_lva):
     value["files"] = [item for item in value["files"] if item["name"] != "preproc.pt"]
     p.write_text(json.dumps(value))
     with pytest.raises(ValueError, match="all eight"):
-        workflow.run_import(source, name="incomplete")
+        workflow.run_import(source)
 
 
 def test_missing_file_and_semantic_mismatch_fail_before_generation(project, flat_lva):
     source = complete(flat_lva)
     (source / "preproc.pt").unlink()
     with pytest.raises(ValueError, match="preproc.pt"):
-        workflow.run_import(source, name="missing")
+        workflow.run_import(source)
     complete(source)
     p = source / "normalization.json"; stats = json.loads(p.read_text()); stats["history_frames"] = 16
     p.write_text(json.dumps(stats)); pin(source)
     with pytest.raises(ValueError, match="history_frames"):
-        workflow.run_import(source, name="invalid_contract")
+        workflow.run_import(source)
     assert not (project / "models").exists()
 
 
 def test_resolve_failure_rolls_back_and_can_retry(project, flat_lva, monkeypatch):
-    source = complete(flat_lva)
+    source = complete(flat_lva, name="recoverable")
     original_check = workflow.resolve
     def fail(path):
         raise RuntimeError("hardware contract mismatch")
     monkeypatch.setattr(workflow, "resolve", fail)
     with pytest.raises(RuntimeError, match="hardware contract mismatch"):
-        workflow.run_import(source, name="recoverable")
+        workflow.run_import(source)
     assert all(not p.exists() for p in workflow.targets("recoverable").values())
     monkeypatch.setattr(workflow, "resolve", original_check)
-    assert workflow.run_import(source, name="recoverable")["status"] == "passed"
+    assert workflow.run_import(source)["status"] == "passed"
 
 
 def test_destination_created_while_validating_is_preserved(project, flat_lva, monkeypatch):
-    source = complete(flat_lva)
+    source = complete(flat_lva, name="race")
     path = workflow.targets("race")["config"]
     @contextmanager
     def competing_import():
@@ -177,19 +189,19 @@ def test_destination_created_while_validating_is_preserved(project, flat_lva, mo
         yield
     monkeypatch.setattr(workflow, "project_lock", competing_import)
     with pytest.raises(FileExistsError):
-        workflow.run_import(source, name="race")
+        workflow.run_import(source)
     assert path.read_text() == "other import owns this"
 
 
 def test_parallel_import_fails_without_touching_model_targets(project, flat_lva):
-    source = complete(flat_lva)
+    source = complete(flat_lva, name="locked")
     with workflow.project_lock(), pytest.raises(RuntimeError, match="Another model import"):
-        workflow.run_import(source, name="locked")
+        workflow.run_import(source)
     assert all(not p.exists() for p in workflow.targets("locked").values())
 
 
 def test_source_change_during_import_rolls_back(project, flat_lva, monkeypatch):
-    source = complete(flat_lva, manifest=False)
+    source = complete(flat_lva, manifest=False, name="mutating")
     original = workflow.importer.prepare
     def change_after_copy(*args, **kwargs):
         result = original(*args, **kwargs)
@@ -198,7 +210,7 @@ def test_source_change_during_import_rolls_back(project, flat_lva, monkeypatch):
         return result
     monkeypatch.setattr(workflow.importer, "prepare", change_after_copy)
     with pytest.raises(ValueError, match="source changed during import"):
-        workflow.run_import(source, name="mutating")
+        workflow.run_import(source)
     assert all(not p.exists() for p in workflow.targets("mutating").values())
 
 
@@ -208,5 +220,33 @@ def test_output_inside_source_is_rejected_before_source_directory_changes(projec
         shutil.copyfile(source / filename, project / filename)
     before = snapshot(project)
     with pytest.raises(ValueError, match="source must be separate"):
-        workflow.run_import(project, name="overlap")
+        workflow.run_import(project)
     assert snapshot(project) == before
+
+
+@pytest.mark.parametrize("name", ["9Model-v2", "拾取模型_1027"])
+def test_directory_name_is_not_lowercased_or_renamed(project, flat_lva, name):
+    source = complete(flat_lva, name=name)
+    result = workflow.run_import(str(source) + "/")
+    assert result["name"] == name
+    paths = workflow.targets(name)
+    assert paths["card"].name == name + ".json"
+    assert paths["config"].name == name + ".yaml"
+    assert paths["launcher"].name == f"start_{name}.sh"
+    assert load_model_card(paths["card"])["model"]["id"] == name
+
+
+def test_symlink_uses_supplied_directory_name(project, flat_lva):
+    source = complete(flat_lva)
+    alias = source.with_name("Checkpoint_Alias")
+    alias.symlink_to(source, target_is_directory=True)
+    result = workflow.run_import(alias, dry_run=True)
+    assert result["name"] == alias.name and result["source"] == str(source.resolve())
+
+
+def test_symlink_parent_navigation_keeps_original_source_resolution(project, flat_lva):
+    source = complete(flat_lva, name="Actual-Checkpoint")
+    alias = source.parent / "links/Alias"
+    alias.parent.mkdir(); alias.symlink_to(source, target_is_directory=True)
+    result = workflow.run_import(alias / ".." / source.name, dry_run=True)
+    assert result["source"] == str(source) and result["name"] == source.name

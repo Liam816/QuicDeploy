@@ -6,8 +6,8 @@
 bash scripts/import_quicforge_model_ckpt.sh /home/ih/heping/checkpoints/你的模型目录
 ```
 
-默认从训练配置和 checkpoint 身份生成名称 `<训练名>_ep<epoch>_step<global_step>`，
-生成 FP16、FP32 两张模型卡，运行配置默认选择 FP16。
+名称直接使用传入 ckpt 目录的最后一级名字，原样保留，不追加 epoch、step、`_fp16` 或 `_fp32`。
+每次只生成所选精度的一张同名模型卡，默认 FP16；epoch、step 保留在 JSON 的 metadata 中，精度由适配器配置表达。
 导入只读源文件，完成后打印对应的 `--check`、`--run` 命令，不连接机械臂。
 
 ## 输入与选项
@@ -35,27 +35,24 @@ checkpoint_dir/
 # 校验并预览名称、路径，不生成部署文件。
 bash scripts/import_quicforge_model_ckpt.sh /path/to/ckpt --dry-run
 
-# Optional short name. / 可选的简短名称。
-bash scripts/import_quicforge_model_ckpt.sh /path/to/ckpt --name pick2box_v2
-
-# Select FP32 in the generated runtime; both precision cards are retained.
-# 让运行配置默认选 FP32，两张精度模型卡仍同时保留。
-bash scripts/import_quicforge_model_ckpt.sh /path/to/ckpt --name pick2box_fp32 --precision fp32
+# Select FP32 when first importing; the filename remains the directory name.
+# 首次导入时可选 FP32，文件名仍为目录名。
+bash scripts/import_quicforge_model_ckpt.sh /path/to/ckpt --precision fp32
 ```
 
-`--name` 只允许小写字母、数字、下划线，以字母开头，最长 128 字符。
+不再使用 `--name` 覆盖目录名。目录名允许字母、数字、中文、下划线、点和连字符，首字符须为字母、数字、中文或下划线，
+最多 240 个 UTF-8 字节；不安全的目录名报错，不会自动改名。输入路径是目录符号链接时，名称使用用户传入的链接名。
 相对输入路径以调用命令时的目录为基准。Shell 入口复用 `quic-deploy` 环境定位，
 也可通过既有 `PYTHON_BIN` / `QUICDEPLOY_ENV_PREFIX` 选择解释器。
 
 ## 生成结果与检查
 
-以 `--name pick2box_v2` 为例：
+传入 `/home/ih/heping/checkpoints/pick2box_v2` 时：
 
 | 生成路径 | 内容 |
 | --- | --- |
 | `models/quicforge/pick2box_v2/` | 精简部署包，含权重、归一化、结构、采样与来源信息 |
-| `configs/models/pick2box_v2_fp16.json` | FP16 模型卡及产物哈希 |
-| `configs/models/pick2box_v2_fp32.json` | FP32 模型卡及产物哈希 |
+| `configs/models/pick2box_v2.json` | 所选精度模型卡及产物哈希，默认 FP16 |
 | `configs/pick2box_v2.yaml` | 继承 defaults.yaml 的独立运行配置 |
 | `scripts/start_pick2box_v2.sh` | 固定该配置并清除旧模型环境覆盖的入口 |
 | `outputs/imports/pick2box_v2/` | 导入回执与此次使用的源文件哈希清单 |
@@ -74,7 +71,7 @@ QUICDEPLOY_WEBVIZ=1 bash scripts/start_pick2box_v2.sh --run
 生成的卡、YAML、启动脚本由 Git 管理；大权重目录和 outputs 按项目现有规则忽略，工具不自动提交 Git。
 
 所有目标路径都拒绝覆盖。源目录与输出目录不能存在包含关系，符号链接解析后也会检查。
-相同名称已经导入时，重新运行会报错；导入新版本可使用自动名称或另一个 `--name`。
+相同目录名已经导入时，重新运行会报错；新模型版本请使用不同的 ckpt 目录名。
 命令通过项目导入锁避免并发写入，失败时移除本次新建目标，保留原始 checkpoint 和已有模型。
 不要在本命令执行期间同时用其他工具手动写入同名目标。
 
@@ -105,10 +102,10 @@ QUICDEPLOY_WEBVIZ=1 bash scripts/start_pick2box_v2.sh --run
 不需要手工填写这些哈希。确需更新依赖文件时，先确认变更并完成对应验证，再重新登记：
 
 ```bash
-python -m quicdeploy register-model configs/models/pick2box_v2_fp16.json --relative
-python -m quicdeploy register-model configs/models/pick2box_v2_fp32.json --relative
+python -m quicdeploy register-model configs/models/pick2box_v2.json --relative
 ```
 
 完整性校验与模型能力评估分别进行；哈希一致不代表模型已经学好任务。
 
-验证记录见 [通用入口验证](validation/import_quicforge_command.json)。
+当前命名规则验证见 [目录原名验证](validation/import_quicforge_directory_names.json)；
+初版流程记录见 [通用入口验证](validation/import_quicforge_command.json)。

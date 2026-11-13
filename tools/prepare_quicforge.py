@@ -101,7 +101,16 @@ def import_source(input_dir, checkpoint_name, conversion_meta, *, transfer_manif
     return source, paths, training, manifest, model_config, provenance
 
 
-def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, transfer_manifest=None, dry_run=False):
+def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, transfer_manifest=None, dry_run=False,
+            card_precision=None):
+    """Optional card_precision writes one unsuffixed card; legacy calls keep two.
+    指定 card_precision 时只写同名的一张卡；未指定的旧调用仍生成原有两张精度卡。
+    """
+    if card_precision is not None and card_precision not in ("fp16", "fp32"):
+        raise ValueError("card_precision must be fp16 or fp32")
+    precisions = (card_precision,) if card_precision else ("fp32", "fp16")
+    cards = {p: PROJECT / "configs/models" / (f"{card_stem}.json" if card_precision else f"{card_stem}_{p}.json")
+             for p in precisions}
     conversions = ([conversion_meta] if isinstance(conversion_meta, (str, Path)) else list(conversion_meta))
     if not conversions:
         raise ValueError("At least one conversion metadata source is required")
@@ -158,9 +167,9 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
             file = (source / name).resolve()
             if not file.is_relative_to(source) or sha256(file) != expected:
                 raise ValueError(f"Uploaded file differs from transfer manifest: {name}")
-    for precision in ("fp32", "fp16"):
-        if (PROJECT / "configs/models" / f"{card_stem}_{precision}.json").exists():
-            raise FileExistsError(f"Model card already exists for {card_stem}_{precision}")
+    for path in cards.values():
+        if path.exists():
+            raise FileExistsError(f"Model card already exists: {path}")
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite deployment bundle: {output}")
     if dry_run:
@@ -202,12 +211,11 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
     if temporal:
         from quicdeploy.config.temporal import code_paths
         code = code_paths()
-    for precision in ("fp32", "fp16"):
-        card_path = PROJECT / "configs/models" / f"{card_stem}_{precision}.json"
+    for precision, card_path in cards.items():
         if card_path.exists():
             raise FileExistsError(f"Refusing to overwrite model card: {card_path}")
         relative = lambda p: os.path.relpath(p, card_path.parent)
-        model = {**PHYSICAL_CONTRACT, "id": f"{card_stem}_{precision}",
+        model = {**PHYSICAL_CONTRACT, "id": card_path.stem,
                  "name": f"{training.get('experiment', {}).get('name', card_stem)} · Epoch {manifest['epoch']} · Step {manifest['global_step']} · {precision.upper()}",
                  "architecture": "DINOv3 + FM", "artifact_format": bundle_format,
                  "adapter": "quicdeploy.policy.quicforge:" + ("QuicForgeLVAAdapter" if precision == "fp32" else "QuicForgeLVAFP16Adapter"),
@@ -236,8 +244,9 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
         print(card_path)
     if temporal:
         import yaml
+        selected = cards["fp16"] if "fp16" in cards else next(iter(cards.values()))
         runtime = {"schema_version": 2, "extends": "defaults.yaml",
-                   "model": f"models/{card_stem}_fp16.json",
+                   "model": f"models/{selected.name}",
                    "execution": {"mode": "async", "prefix_steps": 10, "n_action_steps": 40,
                                  "prefetch_remaining_steps": 23}}
         runtime_path.write_text(yaml.safe_dump(runtime, sort_keys=False, allow_unicode=True))
