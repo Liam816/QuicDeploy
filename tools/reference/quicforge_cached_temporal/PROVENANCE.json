@@ -1,0 +1,15 @@
+{
+  "repository": "QuicForge",
+  "revision": "e2685c87955d7360d90d6553c61e095ce513fa1f",
+  "snapshot_date": "2026-11-16",
+  "note": "Unmodified source read from the training server; independent numerical reference, not a claim about the historical training commit.",
+  "files": {
+    "models/temporal_lva/model.py": "34330c8bd56a0dbe0b3184aa3d28ae2cdc839d97a4472793a1b09ef573bfdcb4",
+    "models/temporal_lva/frozen.py": "e8afc7d172ba6d7f481a443ed9c16d20d5ca98d30391ed940e42152a3f64d11e",
+    "models/lva/decoder.py": "2a88d76d1fe1fcb1747a7495a21b4958b373f86455f5940cecdc3c169f2783be",
+    "models/lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+    "models/lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+    "models/lva/object_ids.py": "9cf2e53505ab548218c593dfc3709a07944ce8e03b0bc4e2be42ba12113de065",
+    "io/weights.py": "39c488e58a2475374d9905d694d11c5cf26b047038a41d349f0c1acff82dcc7e"
+  }
+}

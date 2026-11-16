@@ -104,7 +104,7 @@ exec bash "$ROOT/scripts/start_live.sh" "$@"
 ''' % name
 
 
-def run_import(input_dir, *, precision="fp16", dry_run=False):
+def run_import(input_dir, *, precision="fp16", dry_run=False, hardlink_weights=False):
     if precision not in ("fp16", "fp32"):
         raise ValueError("Precision must be fp16 or fp32")
     supplied = Path(os.path.abspath(Path(input_dir).expanduser()))
@@ -126,9 +126,10 @@ def run_import(input_dir, *, precision="fp16", dry_run=False):
         manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
         inspection = importer.prepare(source, checkpoint["name"], source / "conversion_meta.json",
                                       paths["bundle"], name, transfer_manifest=manifest, dry_run=True,
-                                      card_precision=precision)
+                                      card_precision=precision, hardlink_weights=hardlink_weights)
         plan = {"name": name, "source": str(source), "precision": precision,
                 "checkpoint": checkpoint["name"], **inspection, "source_integrity": integrity,
+                "weights_storage": "hardlink" if hardlink_weights else "copy",
                 "paths": {key: str(path) for key, path in paths.items()},
                 "check_command": f"bash scripts/start_{name}.sh --check",
                 "run_command": f"QUICDEPLOY_WEBVIZ=1 bash scripts/start_{name}.sh --run"}
@@ -141,7 +142,8 @@ def run_import(input_dir, *, precision="fp16", dry_run=False):
             check_destinations(paths)
             try:
                 importer.prepare(source, checkpoint["name"], source / "conversion_meta.json",
-                                 paths["bundle"], name, transfer_manifest=manifest, card_precision=precision)
+                                 paths["bundle"], name, transfer_manifest=manifest, card_precision=precision,
+                                 hardlink_weights=hardlink_weights)
                 if sha256(manifest) != manifest_hash:
                     raise ValueError("Source manifest changed during import")
                 inputs = {item["name"]: item for item in json.loads(manifest_bytes)["files"]}
@@ -184,9 +186,12 @@ def main():
     parser.add_argument("checkpoint_dir", type=Path)
     parser.add_argument("--precision", choices=("fp16", "fp32"), default="fp16")
     parser.add_argument("--dry-run", action="store_true", help="validate and preview only / 只校验和预览")
+    parser.add_argument("--hardlink-weights", action="store_true",
+                        help="share the source weight inode on the same filesystem / 同盘硬链接复用权重，源文件须保持只读")
     args = parser.parse_args()
     try:
-        result = run_import(args.checkpoint_dir, precision=args.precision, dry_run=args.dry_run)
+        result = run_import(args.checkpoint_dir, precision=args.precision, dry_run=args.dry_run,
+                            hardlink_weights=args.hardlink_weights)
     except (OSError, ValueError, KeyError, RuntimeError) as exc:
         parser.exit(1, f"Import failed / 导入失败: {exc}\n")
     print(json.dumps(result, indent=2, ensure_ascii=False))

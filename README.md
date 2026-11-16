@@ -37,6 +37,7 @@ Rotating Box（epoch50 / step38000）专用配置：`configs/lva_rotating_box_ep
 
 Temporal-LVA（历史 vision token 队列、训练帧率采样、当前帧启动 padding、FP32/FP16）见
 [时序模型部署](docs/temporal_lva_deployment.md)。导入器自动识别模型结构并生成独立时序配置。
+`CachedTemporalLVADecoder` + ViT-L/16 已支持，见[缓存训练模型部署与验证](docs/cached_temporal_vitl16_deployment.md)。
 已接入 `update_00050000`：配置 `configs/temporal_lva_update_00050000.yaml`，
 启动检查 `bash scripts/start_temporal_lva_50000.sh --check`；值守运行 `bash scripts/start_temporal_lva_50000.sh --run`。
 

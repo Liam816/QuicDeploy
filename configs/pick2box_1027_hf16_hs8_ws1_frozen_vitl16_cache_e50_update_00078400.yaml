@@ -1,0 +1,6 @@
+# Generated model profile / 自动生成的模型配置
+schema_version: 2
+extends: defaults.yaml
+model: models/pick2box_1027_hf16_hs8_ws1_frozen_vitl16_cache_e50_update_00078400.json
+execution:
+  prefetch_remaining_steps: 23

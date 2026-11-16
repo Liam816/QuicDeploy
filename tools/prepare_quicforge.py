@@ -103,7 +103,7 @@ def import_source(input_dir, checkpoint_name, conversion_meta, *, transfer_manif
 
 
 def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, transfer_manifest=None, dry_run=False,
-            card_precision=None):
+            card_precision=None, hardlink_weights=False):
     """Optional card_precision writes one unsuffixed card; legacy calls keep two.
     指定 card_precision 时只写同名的一张卡；未指定的旧调用仍生成原有两张精度卡。
     """
@@ -145,7 +145,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
         # 在同一受哈希约束的文件中保留各数据集原始元数据，顶层物理字段兼容现有运行接口。
         conversion["dataset_sources"] = metadata
     inference = manifest["inference"]
-    temporal = model_config.get("type") == "TemporalLVADecoder"
+    temporal = model_config.get("type") in {"TemporalLVADecoder", "CachedTemporalLVADecoder"}
     bundle_format = FORMAT
     sampling = None
     if temporal:
@@ -180,7 +180,10 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
     with tempfile.TemporaryDirectory(prefix=".quicforge-import-", dir=output.parent) as tmp:
         bundle = Path(tmp) / "bundle"
         (bundle / "provenance").mkdir(parents=True)
-        shutil.copyfile(paths["weights"], bundle / "weights.pt")
+        if hardlink_weights:
+            os.link(paths["weights"], bundle / "weights.pt")
+        else:
+            shutil.copyfile(paths["weights"], bundle / "weights.pt")
         shutil.copyfile(paths["normalization"], bundle / "normalization.json")
         for source_file, destination in ((paths["training"], "training_config.json"),
                                          (paths["checkpoint"], "checkpoint.json")):
@@ -233,8 +236,10 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
                  "implementation_files": [relative(output / p) for p in sorted(FILES - {"weights.pt", "normalization.json"})]
                                          + [relative(p) for p in code]}
         if temporal:
-            model.update(name=f"Temporal-LVA · Pick Kun Once · Epoch {manifest['epoch']} · Step {manifest['global_step']} · {precision.upper()}",
-                         architecture="DINOv3 ViT-B + spatial queries + temporal queries + FM",
+            variant = model_config.get("backbone", "dinov3_vitb16")
+            model.update(name=f"{training.get('experiment', {}).get('name', card_stem)} · Epoch {manifest['epoch']} · Step {manifest['global_step']} · {precision.upper()}",
+                         architecture=("DINOv3 ViT-L/16" if variant == "dinov3_vitl16" else "DINOv3 ViT-B")
+                                      + " + spatial queries + temporal queries + FM",
                          temporal_sampling=sampling,
                          adapter="quicdeploy.policy.temporal:" +
                                  ("TemporalLVAAdapter" if precision == "fp32" else "TemporalLVAFP16Adapter"))

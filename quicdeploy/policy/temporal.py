@@ -8,13 +8,16 @@ from .lva import LVAAdapter
 class TemporalLVAAdapter(LVAAdapter):
     def load(self, config):
         from ..config.temporal import load_bundle
-        from .backends.temporal_lva import TemporalLVADecoder, half_vitb16
+        from .backends.temporal_lva import TemporalLVADecoder, CachedTemporalLVADecoder, half_temporal
 
         bundle = load_bundle(config)
         self._configure_runtime(config)
         torch = self.torch
         kwargs = {k: v for k, v in bundle["model_config"].items() if k != "type"}
-        kwargs["backbone_repo"] = bundle["backbone_repo"]
+        kwargs["backbone_repo"] = (bundle["backbone_repo"]
+                                   if kwargs.get("backbone", "dinov3_vitb16") == "dinov3_vitb16" else None)
+        model_class = (CachedTemporalLVADecoder if bundle["model_config"]["type"] == "CachedTemporalLVADecoder"
+                       else TemporalLVADecoder)
         weights = torch.load(config["weights"], map_location="cpu", weights_only=True, mmap=True)
         if not isinstance(weights, dict) or not weights or not all(torch.is_tensor(v) for v in weights.values()):
             raise ValueError("Temporal-LVA weights must be a plain state_dict")
@@ -22,7 +25,7 @@ class TemporalLVAAdapter(LVAAdapter):
             if value.is_floating_point() and (value.dtype != torch.float32 or not torch.isfinite(value).all()):
                 raise ValueError("Temporal-LVA reference weights must be finite FP32")
         with torch.device("meta"):
-            model = TemporalLVADecoder(**kwargs)
+            model = model_class(**kwargs)
         model.load_state_dict(weights, strict=True, assign=True)
         if any(t.is_meta for t in (*model.parameters(), *model.buffers())):
             raise ValueError("Incomplete Temporal-LVA state_dict")
@@ -32,7 +35,7 @@ class TemporalLVAAdapter(LVAAdapter):
         if self._fp16:
             if config["device"] != "cuda" or config.get("layerscale_dtype") != "float32":
                 raise ValueError("Temporal FP16 requires CUDA and FP32 LayerScale")
-            half_vitb16(self.model)
+            half_temporal(self.model)
         self.reset()
 
     def reset(self):

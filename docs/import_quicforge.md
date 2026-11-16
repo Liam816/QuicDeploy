@@ -26,9 +26,14 @@ checkpoint_dir/
   conversion_meta.json
 ```
 
-支持现有适配器已验证的单帧 `LVADecoder` 和 `TemporalLVADecoder`，
+支持现有适配器已验证的单帧 `LVADecoder`、`TemporalLVADecoder` 和 `CachedTemporalLVADecoder`，
 包括单数据集、`dataset_sources` 多来源和 `quicforge_sources` 汇总转换元数据。
 模型结构、采样或坐标契约不受支持时，导入会报错，不会从文件名猜测兼容性。
+
+缓存训练的 ViT-L/16 模型保持训练特征和骨干精度，见
+[CachedTemporal ViT-L/16 部署与验证](cached_temporal_vitl16_deployment.md)。
+同盘空间受限时，可显式加 `--hardlink-weights` 复用源权重 inode；默认仍复制。
+硬链接源须保持只读，原地改动会影响部署文件并触发哈希校验失败。
 
 单帧 `LVADecoder` 支持 `backbone: dinov3_vitl16` 和 `backbone: dinov3_vitb16`。
 旧导出缺少 `backbone` 时仍按 ViT-L/16 加载；导出、训练配置和 checkpoint 清单中的有效 backbone 必须一致。

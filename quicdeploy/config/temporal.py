@@ -15,11 +15,30 @@ TEMPORAL_DEFAULTS = {"frame_queries": 96, "temporal_queries": 96, "spatial_layer
 def validate_temporal(model, inference, stats, training, checkpoint, conversion):
     # Reuse all physical, RTC, dataset and normalization checks without relaxing
     # the original single-frame validator or changing old model identities.
-    require(model.get("type"), "TemporalLVADecoder", "temporal model type")
+    if model.get("type") not in {"TemporalLVADecoder", "CachedTemporalLVADecoder"}:
+        raise ValueError("Unsupported temporal model type")
     require(training["model"].get("type"), model["type"], "temporal training type")
     require(checkpoint["model"].get("type"), model["type"], "temporal checkpoint type")
     allowed = {"type", "emb_dim", "time_dim", "out_dim", "n_att_layer", "n_context", "task_ids",
-               "gradient_checkpointing", "preproc_file", "backbone_repo", *TEMPORAL_DEFAULTS}
+               "gradient_checkpointing", "preproc_file", "backbone_repo", "backbone", *TEMPORAL_DEFAULTS}
+    variant = model.get("backbone", "dinov3_vitb16")
+    if variant not in {"dinov3_vitb16", "dinov3_vitl16"}:
+        raise ValueError("Unsupported temporal backbone")
+    for label, owner in (("training", training["model"]), ("checkpoint", checkpoint["model"])):
+        require(owner.get("backbone", "dinov3_vitb16"), variant, label + ".backbone")
+    if variant == "dinov3_vitl16":
+        require(model.get("backbone_repo"), None, "ViT-L backbone_repo")
+    if model["type"] == "CachedTemporalLVADecoder":
+        allowed |= {"freeze_backbone", "backbone_precision"}
+        if model.get("freeze_backbone", True) is not True:
+            raise ValueError("Cached temporal requires freeze_backbone=True")
+        precision = model.get("backbone_precision", "bf16")
+        if precision not in {"bf16", "fp32"}:
+            raise ValueError("Unsupported cached temporal backbone_precision")
+        for label, owner in (("training", training["model"]), ("checkpoint", checkpoint["model"])):
+            if owner.get("freeze_backbone", True) is not True:
+                raise ValueError(label + ".freeze_backbone must be True")
+            require(owner.get("backbone_precision", "bf16"), precision, label + ".backbone_precision")
     if set(model) - allowed:
         raise ValueError(f"Unsupported temporal model arguments: {sorted(set(model) - allowed)}")
     for key, default in TEMPORAL_DEFAULTS.items():
@@ -43,7 +62,9 @@ def validate_temporal(model, inference, stats, training, checkpoint, conversion)
             "history first anchor")
     m, s, t, ck = map(deepcopy, (model, stats, training, checkpoint))
     m["type"] = t["model"]["type"] = ck["model"]["type"] = "LVADecoder"
-    for key in (*TEMPORAL_DEFAULTS, "backbone_repo"):
+    for owner in (m, t["model"], ck["model"]):
+        owner["backbone"] = variant
+    for key in (*TEMPORAL_DEFAULTS, "backbone_repo", "freeze_backbone", "backbone_precision"):
         m.pop(key, None)
     for key in ("history_frames", "history_stride", "window_stride"):
         s[key] = t["data"][key] = 1

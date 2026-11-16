@@ -27,6 +27,7 @@ import sys
 from typing import Any
 
 import torch
+from contextlib import nullcontext
 from torch import nn
 from torch.utils.checkpoint import checkpoint
 
@@ -34,6 +35,19 @@ from .quicforge_lva.decoder import (
     AdaLNBlock, AttLayer, Decoder, NUM_ADVANTAGE_CONDITIONS, SinusoidalTimeEmbedding,
 )
 from .quicforge_lva.task_ids import validate_task_ids
+
+BACKBONE_DIMS = {"dinov3_vitb16": 768, "dinov3_vitl16": 1024}
+
+
+def build_temporal_backbone(backbone="dinov3_vitb16", backbone_repo=None):
+    if backbone == "dinov3_vitb16":
+        return build_dinov3_vitb16(backbone_repo)
+    if backbone == "dinov3_vitl16":
+        if backbone_repo is not None:
+            raise ValueError("backbone_repo is only used with dinov3_vitb16")
+        from .quicforge_lva.dinov3 import DINOv3ViTL16
+        return DINOv3ViTL16()
+    raise ValueError("backbone must be dinov3_vitb16 or dinov3_vitl16")
 
 
 def build_dinov3_vitb16(backbone_repo: str | None = None) -> nn.Module:
@@ -169,7 +183,7 @@ class TemporalLVADecoder(Decoder):
                  backbone_repo: str | None = None, history_frames: int | None = None, history_stride: int = 1,
                  frame_queries: int = 96, temporal_queries: int = 96, spatial_layers: int = 2,
                  temporal_layers: int = 2, encoder_heads: int = 8, encoder_ffn_ratio: int = 4,
-                 time_encoding_scale: float = 1.0):
+                 time_encoding_scale: float = 1.0, backbone: str = "dinov3_vitb16"):
         # Avoid Decoder.__init__, which would allocate the old 303M ViT-L.
         nn.Module.__init__(self)
         positive = dict(emb_dim=emb_dim, time_dim=time_dim, n_att_layer=n_att_layer,
@@ -196,8 +210,9 @@ class TemporalLVADecoder(Decoder):
         self.time_encoding_scale = float(time_encoding_scale)
         self._encoder_dim = emb_dim
 
-        self._backbone = build_dinov3_vitb16(backbone_repo)
-        self._frame_projection = nn.Linear(768, emb_dim)
+        self._backbone = build_temporal_backbone(backbone, backbone_repo)
+        self.backbone_variant = backbone
+        self._frame_projection = nn.Linear(BACKBONE_DIMS[backbone], emb_dim)
         self._frame_queries = nn.Parameter(torch.empty(frame_queries, emb_dim))
         self._temporal_queries = nn.Parameter(torch.empty(temporal_queries, emb_dim))
         nn.init.normal_(self._frame_queries, std=0.02)
@@ -275,7 +290,8 @@ class TemporalLVADecoder(Decoder):
 
     def _encode_frame(self, image: torch.Tensor) -> torch.Tensor:
         # Preserve the official model's full forward, normalization and RoPE.
-        features = self._backbone.forward_features(image)["x_norm_patchtokens"]
+        features = (self._backbone.forward_features(image)["x_norm_patchtokens"]
+                    if self.backbone_variant == "dinov3_vitb16" else self._backbone(image)["patch_tokens"])
         memory = self._frame_projection(features)
         height, width = image.shape[-2] // 16, image.shape[-1] // 16
         if memory.shape[1] != height * width:
@@ -324,3 +340,70 @@ class TemporalLVADecoder(Decoder):
         return super().inference(observation, action_prefix=action_prefix, delay=delay,
                                  num_steps=num_steps, noise=noise,
                                  guidance_scale=guidance_scale, task_id=task_id)
+
+
+class CachedTemporalLVADecoder(TemporalLVADecoder):
+    """Raw-image inference for the frozen-backbone cached-token training model.
+
+    Training's on-disk patch cache is not a deployment dependency. Spatial slots
+    are cached by TemporalLVAAdapter after this exact training feature recipe.
+    """
+
+    def __init__(self, *, freeze_backbone=True, backbone_precision="bf16", **kwargs):
+        if freeze_backbone is not True:
+            raise ValueError("cached-token mode requires freeze_backbone=True")
+        if backbone_precision not in ("bf16", "fp32"):
+            raise ValueError("backbone_precision must be bf16 or fp32")
+        super().__init__(**kwargs)
+        self.freeze_backbone = True
+        self.backbone_precision = backbone_precision
+        self._backbone.requires_grad_(False)
+        self._backbone.eval()
+
+    def _encode_frame(self, image):
+        context = (torch.autocast("cuda", dtype=torch.bfloat16, enabled=self.backbone_precision == "bf16")
+                   if image.device.type == "cuda" else nullcontext())
+        with torch.no_grad(), context:
+            if callable(getattr(self._backbone, "get_intermediate_layers", None)):
+                features = sum(self._backbone.get_intermediate_layers(image, n=4, norm=False))
+            else:
+                intermediate = self._backbone.forward_with_features(
+                    image, layers_to_save=[20, 21, 22, 23])["intermediate"]
+                features = sum(intermediate[f"layer_{index}"] for index in range(20, 24))[:, 5:]
+            features = features.to(torch.bfloat16) if self.backbone_precision == "bf16" else features.float()
+        memory = self._frame_projection(features.to(self._frame_projection.weight.dtype))
+        height, width = image.shape[-2] // 16, image.shape[-1] // 16
+        if memory.shape[1] != height * width:
+            raise ValueError("backbone patch count differs from the patch16 input grid")
+        memory = memory + spatial_position_encoding(height, width, self._encoder_dim,
+                                                    memory.device, memory.dtype)[None]
+        query = self._frame_queries[None].expand(image.shape[0], -1, -1)
+        for block in self._spatial_blocks:
+            query = block(query, memory)
+        return query
+
+
+def half_temporal(model):
+    """Cached variants keep exact FP32 backbone storage and its training autocast.
+
+    Only the resamplers/action decoder use FP16; casting the backbone first and
+    restoring .float() would irreversibly round its trained weights.
+    """
+    if isinstance(model, CachedTemporalLVADecoder):
+        for name, child in model.named_children():
+            if name != "_backbone":
+                child.half()
+        for tensor in (*model.parameters(recurse=False), *model.buffers(recurse=False)):
+            if tensor.is_floating_point():
+                tensor.data = tensor.data.half()
+    elif model.backbone_variant == "dinov3_vitb16":
+        half_vitb16(model)
+    else:
+        preserved = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()
+                     if name.endswith(".gamma")}
+        if len(preserved) != 48:
+            raise ValueError("Expected 48 native ViT-L LayerScale parameters")
+        model.half()
+        for name, tensor in preserved.items():
+            parent, attr = name.rsplit(".", 1)
+            getattr(model.get_submodule(parent), attr).data = tensor
