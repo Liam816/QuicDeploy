@@ -202,6 +202,9 @@ class LVAHalfPrecisionMixin:
                 or config.get("layerscale_dtype") != "float32"):
             raise ValueError("LVA FP16 requires CUDA, FP16 weights and FP32 LayerScale")
         super().load(config)
+        self._convert_half_precision()
+
+    def _convert_half_precision(self):
         self.model.half()
         # DINO LayerScale gammas overflow in FP16; keep them FP32.
         # DINO 的 LayerScale 系数在 FP16 下会溢出，保持 FP32。

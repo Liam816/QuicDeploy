@@ -2,8 +2,9 @@
 
 首个接入模型为 **pick_kun_once_e50_bs20，epoch 50 / step 43700，model 原始权重**。
 这份是最后一轮，不是训练目录中指向 epoch 25 的 best；没有伪造旧 checkpoint 外层字段。
-支持范围：单帧、无 task conditioning、action-GT、50×20、RTC 最长 10 步。
-Temporal/multi-task/state-GT 导出会明确报错。
+单帧适配器支持范围：ViT-L/16 或 ViT-B/16、无 task conditioning、action-GT、50×20、RTC 最长 10 步。
+Temporal 使用独立适配器，见 [时序部署](temporal_lva_deployment.md)；multi-task/state-GT 仍拒绝。
+ViT-B 的架构差异与新 checkpoint 验证见 [ViT-B/16 部署](vitb16_deployment.md)。
 
 ## 运行方式
 
@@ -56,13 +57,14 @@ IK/MIT 子进程仍使用此前单独固定的 quest3 环境，边界未变。
 
 * `quicdeploy/policy/quicforge.py`：校验部署包，加载纯 state_dict，在 meta 上建网络后 strict assign。
   FP32 与 FP16 两类适配器复用 `LVAAdapter` 的图像预处理、确定性噪声、RTC 重锚定与输出后处理。
-* `LVAHalfPrecisionMixin`：从旧 FP16 加载器提取，精度行为不变；旧模型回归输出逐位一致。
-* 冻结网络来自分析时 QuicForge c17f4b0 工作区。只将 3 处绝对 import 改成相对 import，
-  网络计算不改；`PROVENANCE.json` 同时保存原始与迁移后的 SHA-256。
+* `LVAHalfPrecisionMixin`：保留旧 ViT-L FP16 行为，通过精度转换方法分派 ViT-B；旧模型回归输出逐位一致。
+* ViT-L 冻结网络来自分析时 QuicForge c17f4b0 工作区。ViT-B 增加可选视觉骨干和动态输入投影，
+  特征使用训练实现的最后四层、final norm 前 patch 求和。`PROVENANCE.json` 保存原始与迁移后的 SHA-256，
+  并记录 ViT-B 独立参考快照 0e75350 的源码哈希。
 * `config/quicforge.py`：在不导入 torch 的配置阶段检查模型类型、采样、相机、action-GT、单位/坐标、
   数据身份、模型卡精度与包文件清单。推理子进程再次验证包哈希与全部权重的有限性/FP32 类型。
 * `config/resolve.py`：额外检查训练 conversion_meta 的 URDF 哈希与实际部署 URDF 一致。
-* 模型卡固定包内 8 个文件及 9 个代码/溯源文件。路径相对模型卡，可随项目整体迁移；
+* 模型卡固定包内文件及对应代码/溯源文件；ViT-B 还固定共享构造器及官方本地源码。路径相对模型卡，可随项目整体迁移；
   旧的绝对路径模型卡继续兼容。
 
 ## 重新整理包
@@ -78,7 +80,8 @@ python tools/prepare_quicforge.py \
 
 导入工具独立复算上传清单中的哈希，复制原始权重和统计，不修改源文件；拒绝覆盖已有包或模型卡。
 `conversion_meta.json` 必须来自同一训练数据集，不能拿另一个数据集只因 URDF 相同就替代。
-当前 v1 仅导入本文这一类单数据源 LVA checkpoint；不把任意 QuicForge 模型都当成 LVA。
+当前导入器同时支持已验证的单数据源和多数据源元数据；每个来源的身份和物理契约都必须一致。
+八文件上传布局推荐使用 [通用导入命令](import_quicforge.md)，仍拒绝不支持的 QuicForge 架构。
 
 修改适配器或冻结代码后，应审查变化、重新验证，再登记模型卡（不要绕过哈希检查）：
 

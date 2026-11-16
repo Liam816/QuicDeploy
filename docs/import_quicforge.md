@@ -30,6 +30,14 @@ checkpoint_dir/
 包括单数据集、`dataset_sources` 多来源和 `quicforge_sources` 汇总转换元数据。
 模型结构、采样或坐标契约不受支持时，导入会报错，不会从文件名猜测兼容性。
 
+单帧 `LVADecoder` 支持 `backbone: dinov3_vitl16` 和 `backbone: dinov3_vitb16`。
+旧导出缺少 `backbone` 时仍按 ViT-L/16 加载；导出、训练配置和 checkpoint 清单中的有效 backbone 必须一致。
+单帧 ViT-B 复用本地官方构造器，保持单帧特征，不启用 Temporal 的历史缓存或重采样。
+完整 `model.pt` 已含视觉权重，不额外读取训练服务器的 timm 预训练文件，也不在线下载源码。
+两种 backbone 的 FP16 均保持所需 LayerScale 为 FP32；ViT-B 同时保留原始 FP32 RoPE periods。
+ViT-B 模型卡额外固定官方 `third_party/dinov3` 和共享构造/精度代码的哈希。
+当前实例与复验命令见 [ViT-B/16 部署](vitb16_deployment.md)。
+
 ```bash
 # Preview validated names and paths, without generated files.
 # 校验并预览名称、路径，不生成部署文件。

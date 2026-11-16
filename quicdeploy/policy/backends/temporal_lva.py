@@ -72,6 +72,21 @@ def build_dinov3_vitb16(backbone_repo: str | None = None) -> nn.Module:
     return backbone
 
 
+def half_vitb16(model):
+    """Keep exact FP32 scales/RoPE before half conversion; shared by B variants.
+    转换前保存 LayerScale/RoPE 的精确 FP32 值，供单帧和时序 ViT-B 共用。
+    """
+    preserved = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()
+                 if name.endswith(".gamma") or name.endswith("rope_embed.periods")}
+    scales = [m for m in model.modules() if type(m).__name__ == "LayerScale"]
+    if len(scales) != 24:
+        raise ValueError("Expected 24 official ViT-B LayerScale modules")
+    model.half()
+    for name, tensor in preserved.items():
+        parent, attr = name.rsplit(".", 1)
+        getattr(model.get_submodule(parent), attr).data = tensor
+
+
 class CrossAttentionBlock(nn.Module):
     """Single-projection pre-LN cross attention and FFN for the visual encoder."""
 

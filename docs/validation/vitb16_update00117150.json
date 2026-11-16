@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-16",
+  "status": "passed",
+  "base_commit": "56fa509",
+  "model_id": "pick2box_action_gt_full_50ep_1027_vitb16_quicforge_update00117150",
+  "checkpoint": {
+    "epoch": 50,
+    "global_step": 117150,
+    "backbone": "dinov3_vitb16",
+    "weights_sha256": "96ab8b0c87f4f8df44af4d2c38c3088c806a9c1b8d08a01660cec95e78d1bec9"
+  },
+  "production_files": [
+    "configs/models/pick2box_action_gt_full_50ep_1027_vitb16_quicforge_update00117150.json",
+    "configs/pick2box_action_gt_full_50ep_1027_vitb16_quicforge_update00117150.yaml",
+    "scripts/start_pick2box_action_gt_full_50ep_1027_vitb16_quicforge_update00117150.sh"
+  ],
+  "source_integrity": {
+    "kind": "local_baseline_created",
+    "original_files_unchanged": 8,
+    "note": "Observed local baseline; no claim about pre-import transfer integrity."
+  },
+  "runtime": {
+    "torch": "2.11.0+cu128",
+    "numpy": "2.2.6",
+    "device": "NVIDIA GeForce RTX 3060 Laptop GPU"
+  },
+  "reference": {
+    "revision": "0e75350d215a290f86e4579b8a4c2ae39bd7926a",
+    "source_sha256": {
+      "models/lva/decoder.py": "2a88d76d1fe1fcb1747a7495a21b4958b373f86455f5940cecdc3c169f2783be",
+      "models/lva/object_ids.py": "9cf2e53505ab548218c593dfc3709a07944ce8e03b0bc4e2be42ba12113de065",
+      "models/lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+      "models/lva/model.py": "c6bea5e00cbf3643fb75600684d04170f2d61c0a94ba7770802cd4eba5ac943b",
+      "models/lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+      "models/temporal_lva/model.py": "34330c8bd56a0dbe0b3184aa3d28ae2cdc839d97a4472793a1b09ef573bfdcb4"
+    },
+    "dataset": "/home/ih/workspace/yihuigou/openarm_workspace/data/lerobot_20261027_144156",
+    "frames": [
+      0,
+      40,
+      80
+    ],
+    "note": "Independent unmodified current training snapshot; not proof of historical training revision."
+  },
+  "numerical": {
+    "cases_passed": 12,
+    "thresholds": {
+      "fp32": {
+        "position_mm": 0.05,
+        "rotation_deg": 0.02,
+        "gripper_mm": 0.05
+      },
+      "fp16": {
+        "position_mm": 1.0,
+        "rotation_deg": 0.5,
+        "gripper_mm": 1.0
+      }
+    },
+    "max_errors": {
+      "fp32": {
+        "max_abs_component": 0.0,
+        "position_mm": 0.0,
+        "rotation_deg": 2.091309789151873e-06,
+        "gripper_mm": 0.0
+      },
+      "fp16": {
+        "max_abs_component": 0.07709504456920513,
+        "position_mm": 0.2280633674563738,
+        "rotation_deg": 0.030868757671015983,
+        "gripper_mm": 0.07709504456920513
+      }
+    },
+    "fp32_array_equal_to_reference_all_cases": true,
+    "preprocess_max_abs_difference": 0.0,
+    "rtc_absolute_prefix_max_abs_difference": {
+      "fp32": 4.86385548503776e-09,
+      "fp16": 4.440892098500626e-16
+    },
+    "software_ik_commands_checked": 195
+  },
+  "compatibility": {
+    "cases_passed": 8,
+    "all_array_equal_before_after": true,
+    "families": [
+      "ViT-L",
+      "Temporal"
+    ],
+    "precisions": [
+      "fp32",
+      "fp16"
+    ],
+    "modes": [
+      "ordinary",
+      "rtc"
+    ],
+    "note": "Recorded images; Temporal uses synthetic startup frame indices, not chronological history replay.",
+    "legacy_reference_tool_arrays_equal": {
+      "reference_no_prefix": true,
+      "reference_rtc": true,
+      "reference_image": true,
+      "prefix_absolute": true
+    }
+  },
+  "worker": {
+    "cases_passed": 4,
+    "repeats_per_case": 2,
+    "all_array_equal_to_direct": true
+  },
+  "regression_tests": {
+    "all_tests_passed": 167,
+    "targeted_tests_passed": 131
+  },
+  "existing_cards": {
+    "source_pins_refreshed": 13,
+    "model_metadata_and_other_artifacts_unchanged": true,
+    "original_untracked_cards_retained_uncommitted": 3,
+    "valid_model_cards": 18,
+    "valid_runtime_configs": 11
+  },
+  "launcher_check": {
+    "status": "passed",
+    "mode": "async",
+    "prefix_steps": 10,
+    "hardware_presence": "two 1 Mbps CAN interfaces and 3 cameras",
+    "fingerprint": "5359a7df423f4c92b1a97ea9228f6d0415bfa74930f4482e45ca7cf4751428c4"
+  },
+  "physical_commands_sent": 0,
+  "details": [
+    "outputs/vitb16-validation/numerical/report.json",
+    "outputs/vitb16-validation/compatibility/after.json",
+    "outputs/vitb16-validation/worker_validation.json",
+    "outputs/vitb16-validation/reference/reference_provenance.json"
+  ],
+  "limits": "Offline numerical and software-chain checks only; no live task success-rate acceptance."
+}

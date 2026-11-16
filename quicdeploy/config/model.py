@@ -164,16 +164,14 @@ def validate_model(model):
     if model.get("adapter", "").startswith("quicdeploy.policy.quicforge:") and model.get("artifact_format") != "quicforge_lva_v1":
         raise ValueError("QuicForge adapter requires an explicit supported artifact_format")
     if model.get("artifact_format") == "quicforge_lva_v1":
-        from .quicforge import load_bundle
+        from .quicforge import load_bundle, code_paths
 
         bundle = load_bundle(model, verify_hashes=False)
         expected = {str(p.resolve()) for p in bundle["paths"].values()}
         expected.add(str(Path(model["export_metadata"]).resolve()))
         if not expected <= set(artifact_paths(model)):
             raise ValueError("QuicForge model card must pin every bundle member")
-        backend = Path(__file__).parents[1] / "policy/backends/quicforge_lva"
-        code = {backend / name for name in ("__init__.py", "model.py", "decoder.py", "dinov3.py", "task_ids.py", "PROVENANCE.json")}
-        code |= {Path(__file__).parents[1] / p for p in ("policy/quicforge.py", "policy/lva.py", "config/quicforge.py")}
+        code = code_paths(bundle["model_config"])
         if not {str(p.resolve()) for p in code} <= set(artifact_paths(model)):
             raise ValueError("QuicForge model card must pin adapter and frozen network code")
     if model.get("adapter", "").startswith("quicdeploy.policy.temporal:") and model.get("artifact_format") != "quicforge_temporal_lva_v1":

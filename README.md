@@ -50,6 +50,8 @@ bash scripts/import_quicforge_model_ckpt.sh /home/ih/heping/checkpoints/你的�
 直接使用传入 ckpt 目录名，生成同名 JSON、YAML 和 start_<目录名>.sh，不追加 epoch、step 或精度后缀。
 默认 FP16，仅生成所选精度的一张模型卡，拒绝覆盖已有模型；导入期间不连接机械臂。
 输入约定、完整性基线及模型卡 `artifacts` 的说明见 [自动导入模型](docs/import_quicforge.md)。
+单帧模型支持 DINOv3 ViT-L/16（旧配置默认）和显式 `backbone: dinov3_vitb16`；
+本次 ViT-B 模型入口及 FP32/FP16、RTC 离线验证见 [ViT-B/16 部署](docs/vitb16_deployment.md)。
 
 ## 链路 / Pipeline
 

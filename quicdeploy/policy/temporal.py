@@ -8,7 +8,7 @@ from .lva import LVAAdapter
 class TemporalLVAAdapter(LVAAdapter):
     def load(self, config):
         from ..config.temporal import load_bundle
-        from .backends.temporal_lva import TemporalLVADecoder
+        from .backends.temporal_lva import TemporalLVADecoder, half_vitb16
 
         bundle = load_bundle(config)
         self._configure_runtime(config)
@@ -32,18 +32,7 @@ class TemporalLVAAdapter(LVAAdapter):
         if self._fp16:
             if config["device"] != "cuda" or config.get("layerscale_dtype") != "float32":
                 raise ValueError("Temporal FP16 requires CUDA and FP32 LayerScale")
-            preserved = {name: tensor.detach().clone() for name, tensor in self.model.state_dict().items()
-                         if name.endswith(".gamma") or name.endswith("rope_embed.periods")}
-            self.model.half()
-            # Official ViT-B has 12 blocks and two LayerScales per block.
-            scales = [m for m in self.model.modules() if type(m).__name__ == "LayerScale"]
-            if len(scales) != 24:
-                raise ValueError("Expected 24 official ViT-B LayerScale modules")
-            for module in scales:
-                module.gamma.data = module.gamma.data.float()
-            for name, tensor in preserved.items():
-                parent, attr = name.rsplit(".", 1)
-                getattr(self.model.get_submodule(parent), attr).data = tensor
+            half_vitb16(self.model)
         self.reset()
 
     def reset(self):

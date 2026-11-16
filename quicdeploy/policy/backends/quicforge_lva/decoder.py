@@ -131,6 +131,7 @@ class Decoder( nn.Module ):
             num_advantage_conditions=NUM_ADVANTAGE_CONDITIONS,
             task_ids=None,
             dino_weights=None,
+            visual_backbone=None,
     ):
         super().__init__()
         if int(num_advantage_conditions) not in (2, NUM_ADVANTAGE_CONDITIONS):
@@ -140,10 +141,11 @@ class Decoder( nn.Module ):
                 f"{num_advantage_conditions}"
             )
         # dino_weights=None: random backbone init (overwritten later by a full checkpoint / artifact).
-        self._backbone = dino.DINOv3ViTL16()
+        self._backbone = dino.DINOv3ViTL16() if visual_backbone is None else visual_backbone
         if dino_weights is not None:
             dino.load_weights_from_safetensors(self._backbone, dino_weights)
-        self._emb_proj = nn.Linear( 1024, emb_dim )
+        visual_dim = 1024 if visual_backbone is None else visual_backbone.embed_dim
+        self._emb_proj = nn.Linear( visual_dim, emb_dim )
         self._action_proj = nn.Linear( out_dim, emb_dim )
         self._time_embedding = SinusoidalTimeEmbedding( time_dim )
         self._advantage_embedding = nn.Embedding(

@@ -6,6 +6,7 @@ Run under an existing developer env with pyarrow/torchvision, not the lean runti
 import argparse
 import hashlib
 import importlib
+import importlib.util
 import json
 import sys
 import types
@@ -28,20 +29,36 @@ def main():
     from PIL import Image
     project = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(project))
-    reference = Path(__file__).parent / "reference/quicforge_lva"
+    model_config = json.loads((args.bundle / "model_config.json").read_text())
+    variant = model_config.get("backbone", "dinov3_vitl16")
+    if variant not in ("dinov3_vitl16", "dinov3_vitb16"):
+        raise ValueError("Unsupported reference backbone: " + str(variant))
+    legacy_reference = Path(__file__).parent / "reference/quicforge_lva"
+    reference = Path(__file__).parent / "reference" / ("quicforge_vitb" if variant == "dinov3_vitb16" else "quicforge_lva")
     proof = json.loads((reference / "PROVENANCE.json").read_text())
-    for file in ("model.py", "decoder.py", "dinov3.py", "task_ids.py"):
-        if hashlib.sha256((reference / file).read_bytes()).hexdigest() != proof["files"]["models/lva/" + file]:
+    source_files = (proof["files"] if variant == "dinov3_vitb16" else
+                    {"models/lva/" + f: proof["files"]["models/lva/" + f]
+                     for f in ("model.py", "decoder.py", "dinov3.py", "task_ids.py")})
+    for file, expected in source_files.items():
+        path = reference / (file if variant == "dinov3_vitb16" else Path(file).name)
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
             raise ValueError("Original QuicForge reference code changed: " + file)
-    if hashlib.sha256((reference / "reference_ops.py").read_bytes()).hexdigest() != proof["reference_ops_sha256"]:
+    ops_proof = json.loads((legacy_reference / "PROVENANCE.json").read_text())
+    if hashlib.sha256((legacy_reference / "reference_ops.py").read_bytes()).hexdigest() != ops_proof["reference_ops_sha256"]:
         raise ValueError("Original QuicForge reference operations changed")
-    for name in ("quicforge", "quicforge.models", "quicforge.models.lva"):
-        module = types.ModuleType(name); module.__path__ = [str(reference)]; sys.modules[name] = module
+    for name in ("quicforge", "quicforge.models", "quicforge.models.lva", "quicforge.models.temporal_lva"):
+        path = reference
+        if variant == "dinov3_vitb16" and name != "quicforge":
+            path = reference / name.removeprefix("quicforge.").replace(".", "/")
+        module = types.ModuleType(name); module.__path__ = [str(path)]; sys.modules[name] = module
     # Original imports and original network code, not the deployment backend.
     # 原始 import 和原始网络实现，不使用部署 backend。
     NativeModel = importlib.import_module("quicforge.models.lva.model").LVADecoder
-    sys.path.insert(0, str(reference))
-    import reference_ops as ops
+    # Avoid putting the legacy flat dinov3.py ahead of the official namespace package.
+    # 直接加载参考操作，避免旧平铺 dinov3.py 遮蔽官方同名命名空间包。
+    spec = importlib.util.spec_from_file_location("_quicforge_reference_ops", legacy_reference / "reference_ops.py")
+    ops = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ops)
     from quicdeploy.kinematics.urdf import URDFFK
     from quicdeploy.common.layout import ACTION_KEYS, IK_JOINT_NAMES, JOINT_COLUMNS
     from quicdeploy.common.geometry import to6
@@ -49,7 +66,9 @@ def main():
     torch.set_num_threads(4)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
-    model_config = json.loads((args.bundle / "model_config.json").read_text()); model_config.pop("type")
+    model_config.pop("type")
+    if variant == "dinov3_vitb16":
+        model_config["backbone_repo"] = str(project / "third_party/dinov3")
     weights_path = args.bundle / "weights.pt"
     weights = torch.load(weights_path, weights_only=True, mmap=True, map_location="cpu")
     with torch.device("meta"):
@@ -73,7 +92,10 @@ def main():
     report = {"reference": "Original QuicForge network and evaluator functions on deployment-local task recordings",
               "torch": torch.__version__, "numpy": np.__version__, "device": torch.cuda.get_device_name(),
               "checkpoint_weights_sha256": hashlib.file_digest(weights_path.open("rb"), "sha256").hexdigest(),
-              "source_sha256": proof["files"], "dataset": str(args.dataset), "samples": []}
+              "source_sha256": proof["files"], "backbone_variant": variant,
+              "reference_source_revision": proof.get("revision"),
+              "reference_ops_sha256": ops_proof["reference_ops_sha256"],
+              "dataset": str(args.dataset), "samples": []}
     with torch.inference_mode():
         for frame in map(int, args.frames.split(",")):
             row = rows[frame]; joints = np.asarray(row["observation.state"], float)

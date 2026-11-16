@@ -39,3 +39,11 @@ class QuicForgeLVAAdapter(LVAAdapter):
 
 class QuicForgeLVAFP16Adapter(LVAHalfPrecisionMixin, QuicForgeLVAAdapter):
     """Same loader and execution, FP16 weights with FP32 LayerScale. / 相同加载器的 FP16 部署版。"""
+
+    def _convert_half_precision(self):
+        if self.model.backbone_variant == "dinov3_vitb16":
+            from .backends.temporal_lva import half_vitb16
+            half_vitb16(self.model)
+        else:
+            # Keep the existing ViT-L conversion byte-for-byte. / ViT-L 沿用原转换行为。
+            super()._convert_half_precision()

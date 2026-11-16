@@ -109,8 +109,15 @@ def main():
             if provenance["checkpoint_weights_sha256"] != config["model"]["weights_sha256"]:
                 raise ValueError("Reference and deployed checkpoint weights differ")
             backend_provenance = json.loads((PROJECT / "quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json").read_text())
-            for name, entry in backend_provenance["files"].items():
-                if provenance["source_sha256"]["models/lva/" + name] != entry["original_sha256"]:
+            from quicdeploy.config.quicforge import backbone_variant
+            bundle_config = json.loads((Path(config["model"]["artifact_dir"]) / "model_config.json").read_text())
+            variant = backbone_variant(bundle_config)
+            if provenance.get("backbone_variant", "dinov3_vitl16") != variant:
+                raise ValueError("Reference and deployed backbone variants differ")
+            sources = (backend_provenance["variants"][variant]["reference_files"] if variant == "dinov3_vitb16" else
+                       {"models/lva/" + name: entry["original_sha256"] for name, entry in backend_provenance["files"].items()})
+            for name, expected_hash in sources.items():
+                if provenance["source_sha256"][name] != expected_hash:
                     raise ValueError("Reference and frozen source differ: " + name)
             adapter = load_adapter(dict(config["model"]))
             for name, sample in samples.items():

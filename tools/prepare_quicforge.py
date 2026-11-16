@@ -16,7 +16,8 @@ sys.path.insert(0, str(PROJECT))
 
 from quicdeploy.common.io import load_json, sha256
 from quicdeploy.config.model import PHYSICAL_CONTRACT, compact_card, register
-from quicdeploy.config.quicforge import CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET, require, validate_inputs
+from quicdeploy.config.quicforge import (CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET,
+                                       backbone_variant, code_paths, require, validate_inputs)
 
 
 def import_source(input_dir, checkpoint_name, conversion_meta, *, transfer_manifest=None):
@@ -205,12 +206,10 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
             deployment["contract"]["temporal_sampling"] = sampling
         (bundle / "deployment_manifest.json").write_text(json.dumps(deployment, indent=2) + "\n")
         bundle.rename(output)
-    backend = PROJECT / "quicdeploy/policy/backends/quicforge_lva"
-    code = [backend / name for name in ("__init__.py", "model.py", "decoder.py", "dinov3.py", "task_ids.py", "PROVENANCE.json")]
-    code.extend(PROJECT / p for p in ("quicdeploy/policy/quicforge.py", "quicdeploy/policy/lva.py", "quicdeploy/config/quicforge.py"))
+    code = code_paths(model_config) if not temporal else []
     if temporal:
-        from quicdeploy.config.temporal import code_paths
-        code = code_paths()
+        from quicdeploy.config.temporal import code_paths as temporal_code_paths
+        code = temporal_code_paths()
     for precision, card_path in cards.items():
         if card_path.exists():
             raise FileExistsError(f"Refusing to overwrite model card: {card_path}")
@@ -239,6 +238,9 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
                          temporal_sampling=sampling,
                          adapter="quicdeploy.policy.temporal:" +
                                  ("TemporalLVAAdapter" if precision == "fp32" else "TemporalLVAFP16Adapter"))
+        else:
+            model["architecture"] = ("DINOv3 ViT-B/16 + FM" if backbone_variant(model_config) == "dinov3_vitb16"
+                                     else "DINOv3 ViT-L/16 + FM")
         card_path.write_text(json.dumps(compact_card({"schema_version": 1, "model": model}), indent=2, ensure_ascii=False) + "\n")
         register(card_path, relative=True)
         print(card_path)

@@ -16,6 +16,30 @@ FILES = {"weights.pt", "normalization.json", "model_config.json", "inference_con
 PREPROCESSING = {"resize": [480, 640], "crop": [16, 16, 448, 608], "mean": [0.485, 0.456, 0.406],
                  "std": [0.229, 0.224, 0.225], "color": "RGB"}
 CAMERA_MAP = {"left_wrist": "left_wrist", "top": "head", "right_wrist": "right_wrist"}
+BACKBONES = ("dinov3_vitl16", "dinov3_vitb16")
+
+
+def backbone_variant(model):
+    """Old exports omit the field and mean ViT-L. / 旧导出未写字段时仍为 ViT-L。"""
+    value = model.get("backbone", "dinov3_vitl16")
+    if value not in BACKBONES:
+        raise ValueError(f"Unsupported QuicForge backbone: {value!r}")
+    return value
+
+
+def code_paths(model):
+    """Pin the selected implementation, including local official B sources.
+    锁定所选实现；ViT-B 额外锁定本地官方源码，不在运行时下载。
+    """
+    project = Path(__file__).resolve().parents[2]
+    backend = project / "quicdeploy/policy/backends/quicforge_lva"
+    files = [backend / name for name in ("__init__.py", "model.py", "decoder.py", "dinov3.py", "task_ids.py", "PROVENANCE.json")]
+    files += [project / p for p in ("quicdeploy/policy/quicforge.py", "quicdeploy/policy/lva.py", "quicdeploy/config/quicforge.py")]
+    if backbone_variant(model) == "dinov3_vitb16":
+        files.append(project / "quicdeploy/policy/backends/temporal_lva.py")
+        files += sorted((project / "third_party/dinov3").rglob("*.py"))
+        files += [project / "third_party/dinov3/PROVENANCE.json", project / "third_party/dinov3/LICENSE.md"]
+    return files
 
 
 def require(value, expected, label):
@@ -39,9 +63,12 @@ def validate_inputs(model_config, inference, stats, training, checkpoint, conver
     明确拒绝多帧、多任务、state-GT 等尚未支持的模型，不从权重形状猜训练语义。
     """
     require(model_config.get("type"), "LVADecoder", "model type")
-    unknown = set(model_config) - {"type", *DIMS, "gradient_checkpointing", "preproc_file", "task_ids", "dino_weights"}
+    unknown = set(model_config) - {"type", *DIMS, "gradient_checkpointing", "preproc_file", "task_ids", "dino_weights", "backbone"}
     if unknown:
         raise ValueError(f"Unsupported QuicForge model arguments: {sorted(unknown)}")
+    variant = backbone_variant(model_config)
+    for label, owner in (("training", training), ("checkpoint", checkpoint)):
+        require(backbone_variant(owner["model"]), variant, label + ".model.backbone")
     for k, v in DIMS.items():
         require(model_config.get(k), v, k)
         require(training["model"].get(k), v, f"training.model.{k}")
