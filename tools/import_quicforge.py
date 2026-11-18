@@ -157,6 +157,8 @@ def run_import(input_dir, *, precision="fp16", dry_run=False, hardlink_weights=F
                 import yaml
                 profile = {"schema_version": 2, "extends": "defaults.yaml",
                            "model": f"models/{name}.json"}
+                if "hardware" in inspection:
+                    profile["hardware"] = inspection["hardware"]
                 if inspection["temporal_sampling"]:
                     profile["execution"] = {"prefetch_remaining_steps": 23}
                 paths["config"].write_text("# Generated model profile / 自动生成的模型配置\n" +

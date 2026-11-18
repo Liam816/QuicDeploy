@@ -43,6 +43,13 @@ checkpoint_dir/
 ViT-B 模型卡额外固定官方 `third_party/dinov3` 和共享构造/精度代码的哈希。
 当前实例与复验命令见 [ViT-B/16 部署](vitb16_deployment.md)。
 
+单帧模型还支持 QuicDataPipe 为 `bi_piper_native` 录制生成的 PiperX EE 标签。
+导入时同时核对训练 URDF 的 SHA-256、`piperx_dual_root`、左右 `*_ee_link`、关节顺序及每份数据的转换记录。
+匹配后生成的 YAML 选择 `hardware/piper_x/ee/hardware.yaml`，FK 锚点、RTC 和原生 IK 共同使用这套末端坐标。
+训练 URDF 中的 `link_6 → ee_link` 固定关节已包含工具偏移。原生扩展初始化需要两个底座碰撞代理，
+所以在临时副本补上与原配置相同规格的代理，关节链使用训练原件的定义。旧 `world → *_Link6` 配置仍可用于原模型。
+选择模型时使用其专属运行 YAML，模型卡和硬件坐标不匹配会在配置解析阶段报错。
+
 ```bash
 # Preview validated names and paths, without generated files.
 # 校验并预览名称、路径，不生成部署文件。

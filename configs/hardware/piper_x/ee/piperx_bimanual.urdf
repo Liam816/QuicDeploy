@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+<!--
+  Kinematics-only dual-arm PiPER-X model.
+
+  Joint origins and axes are derived from Piper_X's
+  assets/piper_description/urdf/piper_description_v100.urdf.  Geometry and
+  inertial data are intentionally omitted because the dataset tools only need
+  forward kinematics.  The 0.70 m parallel mount spacing is the measured
+  geometry of the PiPER-X collection station used by the bundled datasets.
+  Both arms are evaluated in the shared root frame so the mount transforms are
+  included in FK.
+-->
+<robot name="piperx_bimanual">
+  <link name="piperx_dual_root"/>
+
+  <link name="left_arm_base"/>
+  <joint name="left_mount_joint" type="fixed">
+    <parent link="piperx_dual_root"/>
+    <child link="left_arm_base"/>
+    <origin xyz="0 0.35 0" rpy="0 0 0"/>
+  </joint>
+  <link name="left_link_1"/>
+  <joint name="left_joint_1" type="revolute">
+    <parent link="left_arm_base"/>
+    <child link="left_link_1"/>
+    <origin xyz="0 0 0.123" rpy="0 0 -1.5708"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.618" upper="2.618" effort="100" velocity="3"/>
+  </joint>
+  <link name="left_link_2"/>
+  <joint name="left_joint_2" type="revolute">
+    <parent link="left_link_1"/>
+    <child link="left_link_2"/>
+    <origin xyz="0 0 0" rpy="1.5708 -0.034907 -1.5708"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0" upper="3.14" effort="100" velocity="3"/>
+  </joint>
+  <link name="left_link_3"/>
+  <joint name="left_joint_3" type="revolute">
+    <parent link="left_link_2"/>
+    <child link="left_link_3"/>
+    <origin xyz="0.28358 0.028726 0" rpy="0 0 0.06604341"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.697" upper="0" effort="100" velocity="3"/>
+  </joint>
+  <link name="left_link_4"/>
+  <joint name="left_joint_4" type="revolute">
+    <parent link="left_link_3"/>
+    <child link="left_link_4"/>
+    <origin xyz="-0.24221 0.068514 0" rpy="-1.5708 0 1.3826"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.832" upper="1.832" effort="100" velocity="3"/>
+  </joint>
+  <link name="left_link_5"/>
+  <joint name="left_joint_5" type="revolute">
+    <parent link="left_link_4"/>
+    <child link="left_link_5"/>
+    <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.22" upper="1.22" effort="100" velocity="3"/>
+  </joint>
+  <link name="left_link_6"/>
+  <joint name="left_joint_6" type="revolute">
+    <parent link="left_link_5"/>
+    <child link="left_link_6"/>
+    <origin xyz="0 0.091 0.0014165" rpy="-1.5708 -1.5708 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="3"/>
+  </joint>
+  <link name="left_ee_link"/>
+  <joint name="left_ee_fixed_joint" type="fixed">
+    <parent link="left_link_6"/>
+    <child link="left_ee_link"/>
+    <origin xyz="0 0 0.13503" rpy="0 0 0"/>
+  </joint>
+
+  <link name="right_arm_base"/>
+  <joint name="right_mount_joint" type="fixed">
+    <parent link="piperx_dual_root"/>
+    <child link="right_arm_base"/>
+    <origin xyz="0 -0.35 0" rpy="0 0 0"/>
+  </joint>
+  <link name="right_link_1"/>
+  <joint name="right_joint_1" type="revolute">
+    <parent link="right_arm_base"/>
+    <child link="right_link_1"/>
+    <origin xyz="0 0 0.123" rpy="0 0 -1.5708"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.618" upper="2.618" effort="100" velocity="3"/>
+  </joint>
+  <link name="right_link_2"/>
+  <joint name="right_joint_2" type="revolute">
+    <parent link="right_link_1"/>
+    <child link="right_link_2"/>
+    <origin xyz="0 0 0" rpy="1.5708 -0.034907 -1.5708"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0" upper="3.14" effort="100" velocity="3"/>
+  </joint>
+  <link name="right_link_3"/>
+  <joint name="right_joint_3" type="revolute">
+    <parent link="right_link_2"/>
+    <child link="right_link_3"/>
+    <origin xyz="0.28358 0.028726 0" rpy="0 0 0.06604341"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.697" upper="0" effort="100" velocity="3"/>
+  </joint>
+  <link name="right_link_4"/>
+  <joint name="right_joint_4" type="revolute">
+    <parent link="right_link_3"/>
+    <child link="right_link_4"/>
+    <origin xyz="-0.24221 0.068514 0" rpy="-1.5708 0 1.3826"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.832" upper="1.832" effort="100" velocity="3"/>
+  </joint>
+  <link name="right_link_5"/>
+  <joint name="right_joint_5" type="revolute">
+    <parent link="right_link_4"/>
+    <child link="right_link_5"/>
+    <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.22" upper="1.22" effort="100" velocity="3"/>
+  </joint>
+  <link name="right_link_6"/>
+  <joint name="right_joint_6" type="revolute">
+    <parent link="right_link_5"/>
+    <child link="right_link_6"/>
+    <origin xyz="0 0.091 0.0014165" rpy="-1.5708 -1.5708 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="100" velocity="3"/>
+  </joint>
+  <link name="right_ee_link"/>
+  <joint name="right_ee_fixed_joint" type="fixed">
+    <parent link="right_link_6"/>
+    <child link="right_ee_link"/>
+    <origin xyz="0 0 0.13503" rpy="0 0 0"/>
+  </joint>
+</robot>

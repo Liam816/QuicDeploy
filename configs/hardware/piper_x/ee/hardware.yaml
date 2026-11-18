@@ -1,0 +1,39 @@
+# Piper-X hardware identity, kinematics and pinned geometry/binaries.
+# Piper-X 硬件身份、运动学文件，以及被哈希锁定的几何/二进制文件。
+# Independent of the model; relative paths are relative to this file.
+# 与模型无关；相对路径以本文件为基准。
+schema_version: 1
+physical_contract:
+  protocol: eef20_relative
+  frame: piperx_dual_root
+  ends:
+    left: left_ee_link
+    right: right_ee_link
+  position_unit: m
+  gripper_unit: mm
+  rotation: columns6d
+robot_config: ../robot.json
+kinematics:
+  # Exact training URDF. Native IK stages its base proxies in a temporary copy.
+  # 训练 URDF 原件。原生 IK 只在临时副本中补底座代理。
+  urdf: piperx_bimanual.urdf
+  yaml: ik.yaml
+  # Deployment-only differential IK extension (provenance: build_manifest.json next to it).
+  # It links pinocchio/coal from the quest3 env below, so it must run under that Python.
+  # 仅用于部署的差分 IK 扩展（来源见同目录 build_manifest.json）；
+  # 它链接下方 quest3 环境里的 pinocchio/coal 动态库，必须用该 Python 运行。
+  extension: ../../../../third_party/piper_differential_ik/piper_differential_ik.cpython-312-x86_64-linux-gnu.so
+  python: /home/ih/workspace/piper_pipeline/envs/quest3/bin/python
+  # reference: integrate IK from the last accepted command (like teleop recording).
+  # reference：从上一次接受的指令积分 IK（与遥操作录制一致）。
+  solver_state_mode: reference
+# USB-CAN adapter serials that define left/right. / 定义左右臂的 USB-CAN 适配器序列号。
+can_adapter_serials:
+  left: 003F00344148571320343133
+  right: 003100265547571120343930
+# Pinned files (relative to this file): any change must be reviewed and re-pinned here.
+# 被锁定的文件（相对本文件）：任何改动都需审核后在此更新哈希。
+artifacts:
+  ik.yaml: 71508ca2c5710a2b58de11393b5486754a5baa798bdd1a6fec4a45712026eece
+  piperx_bimanual.urdf: 4b2652c29a0ef48e97958137e6e85e1273055cae011b8a9df0078c80d98439c5
+  ../../../../third_party/piper_differential_ik/piper_differential_ik.cpython-312-x86_64-linux-gnu.so: a98292e24fac8b99f333a906ddea51971571c7773dceef575f616d91ca2afe23

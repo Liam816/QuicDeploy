@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent
 
 
 class State:
-    def __init__(self, urdf=None, packages=None, joint_names=None, end_links=None):
+    def __init__(self, urdf=None, packages=None, joint_names=None, end_links=None, frame="world"):
         self.condition = threading.Condition()
         self.revision = 0
         self.received = None
@@ -31,6 +31,7 @@ class State:
         self.packages = {name: Path(path).resolve() for name, path in (packages or {}).items()}
         self.joint_names = joint_names or [[f"{side}_joint{i}" for i in range(1, 7)] for side in ("left", "right")]
         self.end_links = end_links or ["left_Link6", "right_Link6"]
+        self.frame = frame
 
     def ingest(self, packet):
         if not isinstance(packet, dict) or not isinstance(packet.get("session_id"), str):
@@ -65,7 +66,7 @@ class State:
                 "urdf_url": "/robot/" + self.urdf.name if self.urdf else None,
                 "urdf_sha256": self.urdf_sha256,
                 "packages": {name: f"/packages/{name}/" for name in self.packages},
-                "frame": "world", "units": "m", "end_links": self.end_links,
+                "frame": self.frame, "units": "m", "end_links": self.end_links,
                 "joint_names": self.joint_names}
 
 
@@ -204,10 +205,10 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
 
 
-def make_server(host="127.0.0.1", port=8765, *, urdf=None, packages=None, joint_names=None, end_links=None):
+def make_server(host="127.0.0.1", port=8765, *, urdf=None, packages=None, joint_names=None, end_links=None, frame="world"):
     server = ThreadingHTTPServer((host, port), Handler)
     server.daemon_threads = True
-    server.state = State(urdf, packages, joint_names, end_links)
+    server.state = State(urdf, packages, joint_names, end_links, frame)
     return server
 
 
@@ -219,6 +220,7 @@ def main():
     parser.add_argument("--package", action="append", default=[], metavar="NAME=PATH")
     parser.add_argument("--joint-names", nargs=12, metavar="JOINT", help="six left joints then six right joints")
     parser.add_argument("--end-links", nargs=2, metavar="LINK", help="left and right controlled wrist links")
+    parser.add_argument("--frame", default="world", help="pose coordinate frame displayed by this server")
     parser.add_argument("--demo", action="store_true", help="synthetic data, no hardware")
     parser.add_argument("--replay", type=Path, help="directory of diagnostic chunk_*.npz, no hardware")
     args = parser.parse_args()
@@ -231,7 +233,7 @@ def main():
         parser.error("URDF package directory does not exist")
     names = [args.joint_names[:6], args.joint_names[6:]] if args.joint_names else None
     server = make_server(args.host, args.port, urdf=args.urdf, packages=packages,
-                         joint_names=names, end_links=args.end_links)
+                         joint_names=names, end_links=args.end_links, frame=args.frame)
     if args.demo or args.replay:
         from .offline import feed
         threading.Thread(target=feed, args=(server.state, args.replay), daemon=True).start()

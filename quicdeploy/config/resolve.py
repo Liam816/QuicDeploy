@@ -18,7 +18,7 @@ import numpy as np
 
 from ..common.io import digest, load_json, load_yaml, resolve_path, sha256
 from ..common.validation import is_int, is_number, validate_gripper_binary_thresholds, validate_gripper_speed
-from .model import PHYSICAL_CONTRACT, load_model_card
+from .model import PHYSICAL_CONTRACT, PIPERX_EE_CONTRACT, PIPERX_EE_JOINT_NAMES, PIPERX_EE_URDF_SHA256, load_model_card
 from .defaults import OPTIONAL_DEFAULTS
 
 MODES = ("sync", "async", "rtc")
@@ -139,7 +139,10 @@ def load_hardware(hardware_path, sources):
     _keys(hardware, HARDWARE_KEYS, label="hardware")
     if hardware["schema_version"] != 1:
         raise ValueError("Unsupported hardware version")
-    for key, expected in PHYSICAL_CONTRACT.items():
+    physical = hardware["physical_contract"]
+    piperx_ee = physical.get("frame") == PIPERX_EE_CONTRACT["frame"]
+    expected_contract = PIPERX_EE_CONTRACT if piperx_ee else PHYSICAL_CONTRACT
+    for key, expected in expected_contract.items():
         if hardware["physical_contract"].get(key) != expected:
             raise ValueError(f"Hardware bundle coordinate contract differs: {key}")
     robot_path = resolve_path(hardware["robot_config"], hardware_path)
@@ -167,6 +170,18 @@ def load_hardware(hardware_path, sources):
         raise ValueError("ik.yaml urdf_path differs from the FK URDF; FK and IK frames would disagree")
     for key in ("urdf", "native_urdf", "extension"):
         sources[kinematics[key]] = sha256(kinematics[key])
+    if piperx_ee:
+        if sources[kinematics["urdf"]] != PIPERX_EE_URDF_SHA256:
+            raise ValueError("PiperX EE hardware profile requires the pinned training URDF")
+        ik_model = ik_parameters["model"]
+        if (ik_model["root_frame"] != physical["frame"]
+                or ik_model["tcp_frames"] != [physical["ends"][side] for side in ("left", "right")]
+                or ik_model["controlled_joints"] != PIPERX_EE_JOINT_NAMES
+                or ik_model.get("tcp_definitions")):
+            raise ValueError("PiperX EE IK frames or joint order differ from the training URDF")
+        kinematics.update(frame=physical["frame"], ends=deepcopy(physical["ends"]),
+                          ik_root_frame=physical["frame"], joint_names=PIPERX_EE_JOINT_NAMES.copy(),
+                          native_base_proxies=True)
     if robot["robot"].get("log_dir"):
         robot["robot"]["log_dir"] = str(resolve_path(robot["robot"]["log_dir"], robot_path))
     initial = robot["robot"].get("initial_pose_file")
@@ -238,6 +253,9 @@ def resolve(config_path, *, model_card=None):
     model = dict(card["model"], device=settings["runtime"]["device"], cpu_threads=settings["runtime"]["cpu_threads"])
 
     hardware = load_hardware(resolve_path(raw["hardware"], path), sources)
+    for key in ("frame", "ends"):
+        if model.get(key, PHYSICAL_CONTRACT[key]) != hardware["kinematics"].get(key, PHYSICAL_CONTRACT[key]):
+            raise ValueError(f"Model and hardware coordinate contracts differ: {key}")
     if model.get("artifact_format") in ("quicforge_lva_v1", "quicforge_temporal_lva_v1"):
         if model["artifact_format"] == "quicforge_temporal_lva_v1":
             from .temporal import load_bundle

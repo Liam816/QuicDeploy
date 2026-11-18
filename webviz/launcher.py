@@ -21,7 +21,12 @@ def main():
     host = os.environ.get("QUICDEPLOY_WEBVIZ_HOST", "0.0.0.0")
     from quicdeploy.config.resolve import resolve
     config = resolve(Path(args.config), model_card=Path(args.model) if args.model else None)
-    urdf = os.environ.get("QUICDEPLOY_WEBVIZ_URDF", config["kinematics"].get("urdf", ""))
+    kinematics = config["kinematics"]
+    urdf = os.environ.get("QUICDEPLOY_WEBVIZ_URDF", kinematics.get("urdf", ""))
+    frame = kinematics.get("frame", "world")
+    joint_names = kinematics.get("joint_names")
+    ends = kinematics.get("ends")
+    end_links = [ends["left"], ends["right"]] if ends else None
     root = Path(__file__).resolve().parent.parent
     if not (root / "webviz/dist/index.html").is_file():
         raise RuntimeError("Build webviz first: cd webviz/frontend && npm ci && npm run build")
@@ -39,6 +44,8 @@ def main():
         command = [sys.executable, "-m", "webviz.server", "--host", host, "--port", str(port)]
         if urdf:
             command += ["--urdf", urdf]
+        if joint_names:
+            command += ["--joint-names", *joint_names, "--end-links", *end_links, "--frame", frame]
         with (out / "server.log").open("a") as log:
             process = subprocess.Popen(command, cwd=root, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                        start_new_session=True)
@@ -53,8 +60,13 @@ def main():
             raise RuntimeError(f"Webviz startup timed out; see {out / 'server.log'}")
     with urlopen(f"http://127.0.0.1:{port}/api/config", timeout=0.5) as response:
         active = json.load(response)
+    different_urdf = urdf and active.get("urdf_sha256") != hashlib.sha256(Path(urdf).read_bytes()).hexdigest()
+    if (active.get("frame", "world") != frame
+            or (joint_names and (different_urdf or active.get("end_links") != end_links
+                                 or active.get("joint_names") != [joint_names[:6], joint_names[6:]]))):
+        raise RuntimeError("Webviz uses a different kinematics profile. Restart it or use a different port.")
     print(f"Web visualization ready on port {port} (read-only; no browser motion controls)", flush=True)
-    if urdf and active.get("urdf_sha256") != hashlib.sha256(Path(urdf).read_bytes()).hexdigest():
+    if different_urdf:
         print("Webviz is reusing a server with a different URDF. Restart it to load the new URDF.", flush=True)
 
 

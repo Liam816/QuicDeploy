@@ -6,7 +6,8 @@ from pathlib import Path
 import numpy as np
 
 from ..common.io import load_json, sha256
-from .model import CAMERA_ORDER, PHYSICAL_CONTRACT
+from .model import (CAMERA_ORDER, PHYSICAL_CONTRACT, PIPERX_EE_CONTRACT,
+                    PIPERX_EE_JOINT_NAMES, PIPERX_EE_URDF_SHA256)
 
 FORMAT = "quicforge_lva_v1"
 TARGET = {"pose_source": "action", "anchor_pose_source": "state", "first_target_offset_steps": 1}
@@ -58,7 +59,7 @@ def checked_path(root, relative):
     return result
 
 
-def validate_inputs(model_config, inference, stats, training, checkpoint, conversion):
+def validate_inputs(model_config, inference, stats, training, checkpoint, conversion, *, allow_piperx_ee=False):
     """Reject temporal/multi-task/state-GT exports rather than guessing a contract.
     明确拒绝多帧、多任务、state-GT 等尚未支持的模型，不从权重形状猜训练语义。
     """
@@ -101,10 +102,30 @@ def validate_inputs(model_config, inference, stats, training, checkpoint, conver
         raise ValueError("QuicForge requires paired finite mu/std vectors of length 20, std > 0")
     require(conversion.get("fps"), 30, "data fps")
     kinematics = conversion["kinematics"]
-    for side in ("left", "right"):
-        require(kinematics[side]["base_link"], "world", f"{side} frame")
-        require(kinematics[side]["end_link"], side + "_Link6", f"{side} endpoint")
     labels = conversion["pose_labels"]
+    physical = PHYSICAL_CONTRACT
+    if allow_piperx_ee and (
+        kinematics.get("urdf_sha256") == PIPERX_EE_URDF_SHA256
+        or any(kinematics[side]["base_link"] == PIPERX_EE_CONTRACT["frame"] for side in ("left", "right"))
+    ):
+        physical = PIPERX_EE_CONTRACT
+        require(kinematics.get("urdf_sha256"), PIPERX_EE_URDF_SHA256, "PiperX EE training URDF SHA-256")
+        require(conversion.get("schema_version"), 2, "PiperX EE conversion schema")
+        require(conversion.get("source_robot_type"), "bi_piper_native", "PiperX EE source robot")
+        require(conversion.get("robot_profile"), "piperx", "PiperX EE conversion profile")
+        require(kinematics.get("input_joint_angle_unit"), "degrees", "PiperX EE joint unit")
+        require(labels.get("transform_direction"), "base_link_to_end_link", "PiperX EE pose direction")
+        require(labels.get("gripper_source_feature"), "action", "PiperX EE gripper source")
+        for i, side in enumerate(("left", "right")):
+            start = 6 * i
+            require(kinematics[side].get("joint_names"), PIPERX_EE_JOINT_NAMES[start:start + 6], f"{side} joint order")
+        # The native recorder uses mm. This converter schema uses the URDF
+        # end link directly with no post-FK offset. Explicit conflicts still fail.
+        # 原生录制的夹爪单位为 mm。该转换格式直接取 URDF 末端，不额外叠加 FK 偏移。显式冲突仍拒绝。
+        labels = {"gripper_unit": "millimeters", "tcp_offset_applied": False, **labels}
+    for side in ("left", "right"):
+        require(kinematics[side]["base_link"], physical["frame"], f"{side} frame")
+        require(kinematics[side]["end_link"], physical["ends"][side], f"{side} endpoint")
     for key, value in {"position_unit": "meters", "gripper_unit": "millimeters",
                        "rotation_representation": "rotation_6d_first_two_columns", "tcp_offset_applied": False}.items():
         require(labels.get(key), value, key)
@@ -127,6 +148,7 @@ def validate_inputs(model_config, inference, stats, training, checkpoint, conver
         require(data_id, Path(metadata["source_dataset"]).name + "_kvdb", "dataset identity")
         for key in ("schema_version", "source_robot_type", "robot_profile", "fps", "kinematics", "pose_labels", "camera_map"):
             require(metadata.get(key), conversion.get(key), "dataset physical contract." + key)
+    return physical
 
 
 def load_bundle(config, *, verify_hashes=True):
@@ -150,12 +172,12 @@ def load_bundle(config, *, verify_hashes=True):
     training = load_json(paths["provenance/training_config.json"])
     checkpoint = load_json(paths["provenance/checkpoint.json"])
     conversion = load_json(paths["provenance/conversion_meta.json"])
-    validate_inputs(model, inference, stats, training, checkpoint, conversion)
-    expected_contract = {**PHYSICAL_CONTRACT, "horizon": 50, "action_dt_s": 1 / 30,
+    physical = validate_inputs(model, inference, stats, training, checkpoint, conversion, allow_piperx_ee=True)
+    expected_contract = {**physical, "horizon": 50, "action_dt_s": 1 / 30,
                          "first_target_offset_s": 1 / 30, "fixed_prefix_steps": 10,
                          "target_contract": TARGET, "history_frames": 1, "camera_map": CAMERA_MAP}
     require(manifest.get("contract"), expected_contract, "physical contract")
-    for key in (*PHYSICAL_CONTRACT, "horizon", "action_dt_s", "first_target_offset_s", "fixed_prefix_steps", "target_contract"):
+    for key in (*physical, "horizon", "action_dt_s", "first_target_offset_s", "fixed_prefix_steps", "target_contract"):
         require(config.get(key), expected_contract[key], "model card." + key)
     for key, expected in {"supervision": "action", "uses_state": False, "uses_language": False,
                           "output_domain": "physical"}.items():

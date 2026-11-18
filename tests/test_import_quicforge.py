@@ -11,7 +11,7 @@ import pytest
 import yaml
 
 from quicdeploy.common.io import PROJECT_ROOT, sha256
-from quicdeploy.config.model import load_model_card
+from quicdeploy.config.model import PIPERX_EE_CONTRACT, PIPERX_EE_JOINT_NAMES, PIPERX_EE_URDF_SHA256, load_model_card
 from test_quicforge import bundle as single_frame_bundle
 from test_prepare_quicforge import flat, flat_lva, aggregated_flat, pin
 from tools import import_quicforge as workflow
@@ -50,6 +50,65 @@ def complete(source, *, manifest=True, name=None):
     if not manifest:
         (source / "download_manifest.json").unlink()
     return source
+
+
+@pytest.fixture
+def flat_piperx_ee(flat_lva):
+    path = flat_lva / "conversion_meta.json"
+    meta = json.loads(path.read_text())
+    meta.update(schema_version=2, source_robot_type="bi_piper_native", robot_profile="piperx")
+    meta["kinematics"] = {"urdf_sha256": PIPERX_EE_URDF_SHA256, "input_joint_angle_unit": "degrees"}
+    for side, start in (("left", 0), ("right", 6)):
+        meta["kinematics"][side] = {"base_link": PIPERX_EE_CONTRACT["frame"],
+                                    "end_link": PIPERX_EE_CONTRACT["ends"][side],
+                                    "joint_names": PIPERX_EE_JOINT_NAMES[start:start + 6]}
+    meta["pose_labels"] = {"position_unit": "meters", "rotation_representation": "rotation_6d_first_two_columns",
+                           "transform_direction": "base_link_to_end_link", "gripper_source_feature": "action"}
+    path.write_text(json.dumps(meta))
+    return flat_lva
+
+
+def test_piperx_ee_import_selects_matching_hardware(project, flat_piperx_ee, monkeypatch):
+    from quicdeploy.config.resolve import resolve
+
+    shutil.copyfile(PROJECT_ROOT / "configs/defaults.yaml", project / "configs/defaults.yaml")
+    (project / "configs/hardware").symlink_to(PROJECT_ROOT / "configs/hardware", target_is_directory=True)
+    (project / "third_party").symlink_to(PROJECT_ROOT / "third_party", target_is_directory=True)
+    monkeypatch.setattr(workflow, "resolve", resolve)
+    source = complete(flat_piperx_ee, name="piperx_ee_run")
+    result = workflow.run_import(source)
+    assert result["hardware"] == "hardware/piper_x/ee/hardware.yaml"
+    paths = workflow.targets(source.name)
+    config = resolve(paths["config"])
+    assert config["model"]["frame"] == PIPERX_EE_CONTRACT["frame"]
+    assert config["model"]["ends"] == PIPERX_EE_CONTRACT["ends"]
+    assert config["kinematics"]["joint_names"] == PIPERX_EE_JOINT_NAMES
+    assert sha256(config["kinematics"]["urdf"]) == PIPERX_EE_URDF_SHA256
+    override = yaml.safe_load(paths["config"].read_text())
+    override.pop("hardware")
+    paths["config"].write_text(yaml.safe_dump(override))
+    with pytest.raises(ValueError, match="Model and hardware coordinate contracts differ"):
+        resolve(paths["config"])
+
+
+@pytest.mark.parametrize("mismatch,match", [
+    ("urdf", "training URDF SHA-256"),
+    ("joint_order", "right joint order"),
+    ("gripper_unit", "gripper_unit"),
+])
+def test_piperx_ee_import_rejects_mismatched_training_metadata(project, flat_piperx_ee, mismatch, match):
+    path = flat_piperx_ee / "conversion_meta.json"
+    meta = json.loads(path.read_text())
+    if mismatch == "urdf":
+        meta["kinematics"]["urdf_sha256"] = "0" * 64
+    elif mismatch == "joint_order":
+        meta["kinematics"]["right"]["joint_names"].reverse()
+    else:
+        meta["pose_labels"]["gripper_unit"] = "meters"
+    path.write_text(json.dumps(meta))
+    source = complete(flat_piperx_ee, name="piperx_ee_run")
+    with pytest.raises(ValueError, match=match):
+        workflow.run_import(source, dry_run=True)
 
 
 def test_import_without_manifest_preserves_originals_and_pins_artifacts(project, flat_lva):

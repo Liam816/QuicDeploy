@@ -1,0 +1,5 @@
+# Generated model profile / 自动生成的模型配置
+schema_version: 2
+extends: defaults.yaml
+model: models/pick_kun_once_right_arm_iter12w_bs24_update_00120000.json
+hardware: hardware/piper_x/ee/hardware.yaml

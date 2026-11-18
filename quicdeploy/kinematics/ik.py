@@ -1,6 +1,6 @@
-"""Link6 wrist FK and a client for the isolated native differential-IK worker.
+"""End-effector FK and a client for the isolated native differential-IK worker.
 
-Link6 手腕正运动学，以及隔离进程中原生差分 IK 求解器的客户端。
+末端正运动学，以及隔离进程中原生差分 IK 求解器的客户端。
 
 The IK extension is a compiled module built for a different Python env, so it
 runs in its own subprocess (ik_worker.py) and talks JSON lines over a socketpair.
@@ -17,7 +17,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from ..common.geometry import rot6d, to6, validate_pose
-from ..common.layout import IK_JOINT_NAMES, JOINT_COLUMNS
+from ..common.layout import IK_JOINT_NAMES, JOINT_COLUMNS, SIDES
+from ..config.model import PHYSICAL_CONTRACT
 from .urdf import URDFFK
 
 
@@ -30,19 +31,23 @@ class Kinematics:
         if config.get("solver_state_mode", "measured") not in ("measured", "reference"):
             raise ValueError("Unknown IK solver state mode")
         self.fk = URDFFK(Path(config["urdf"]))
-        # Native IK works in arm_origin; model poses are in world.
-        # 原生 IK 在 arm_origin 坐标系下求解，模型位姿在 world 系下。
-        self.origin = self.fk.link_fk("world", "arm_origin", {})
+        # FK uses the trained pose frame. Only the legacy solver has a root offset.
+        # FK 使用训练位姿坐标系；旧版求解器的根节点另有固定偏移。
+        self.frame = config.get("frame", PHYSICAL_CONTRACT["frame"])
+        self.ik_root_frame = config.get("ik_root_frame", "arm_origin")
+        self.target_frames = [config.get("ends", PHYSICAL_CONTRACT["ends"])[side] for side in SIDES]
+        self.joint_names = config.get("joint_names", IK_JOINT_NAMES)
+        self.origin = self.fk.link_fk(self.frame, self.ik_root_frame, {})
         import yaml
 
         native = yaml.safe_load(Path(config["yaml"]).read_text())
-        if native["model"]["root_frame"] != "arm_origin":
+        if native["model"]["root_frame"] != self.ik_root_frame:
             raise ValueError("Native IK frame changed")
         self.dt = float(config.get("control_dt_s", native["ik"]["dt"]))
         if not np.isfinite(self.dt) or not 0 < self.dt <= 0.05:
             raise ValueError("Invalid control timestep")
-        if native["model"]["tcp_frames"] != ["left_Link6", "right_Link6"] or native["model"].get("tcp_definitions"):
-            raise ValueError("Deployment IK must directly control left_Link6/right_Link6 without TCP offsets")
+        if native["model"]["tcp_frames"] != self.target_frames or native["model"].get("tcp_definitions"):
+            raise ValueError("Deployment IK must control the configured end links directly without extra TCP offsets")
         self.sock, child = socket.socketpair()
         self.sock.settimeout(2)
         env = os.environ.copy()
@@ -66,7 +71,7 @@ class Kinematics:
         self.stream = self.sock.makefile("rwb")
         try:
             info = self.request("info")
-            if info["names"] != IK_JOINT_NAMES:
+            if info["names"] != self.joint_names:
                 raise ValueError("Native joint order mismatch")
             self.initial = np.array(info["initial_q"])
             self.joint_damping = info["joint_damping"]
@@ -98,19 +103,19 @@ class Kinematics:
         self.joint_travel_deg = np.zeros(12)
 
     def wrist(self, joints):
-        """14D joints (deg/mm) -> EEF20 world Link6 pose. / 关节 -> world 系 Link6 位姿。"""
+        """14D joints (deg/mm) -> EEF20 in the trained pose frame. / 关节转为训练坐标系的 EEF20。"""
         q = np.deg2rad(np.asarray(joints)[JOINT_COLUMNS])
-        values = dict(zip(IK_JOINT_NAMES, q, strict=True))
+        values = dict(zip(self.joint_names, q, strict=True))
         pose = []
-        for side, grip in (("left", 6), ("right", 13)):
-            t = self.fk.link_fk("world", side + "_Link6", values)
+        for end, grip in zip(self.target_frames, (6, 13), strict=True):
+            t = self.fk.link_fk(self.frame, end, values)
             pose.extend(t[:3, 3])
             pose.extend(to6(t[:3, :3]))
             pose.append(float(joints[grip]))
         return validate_pose([pose])[0]
 
     def ik_targets(self, wrist):
-        """World EEF20 goal -> two arm_origin [xyz, wxyz] targets. / world 目标转为 arm_origin 系。"""
+        """EEF20 goal -> two solver-root [xyz, wxyz] targets. / EEF20 目标转为求解器根坐标系。"""
         targets = []
         for b in (0, 10):
             t = np.eye(4)

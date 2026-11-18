@@ -1,5 +1,5 @@
-"""Startup self-check: dataset FK and native IK must agree on Link6.
-启动自检：数据集 FK 与原生 IK 的 Link6 坐标系必须一致，且 IK 能局部收敛。
+"""Startup self-check: dataset FK and native IK must agree on the controlled end links.
+启动自检：数据集 FK 与原生 IK 的末端坐标系必须一致，且 IK 能局部收敛。
 """
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -26,7 +26,7 @@ def check_kinematics(ik, guard_settings):
             rb = Rotation.from_quat([*b[4:], b[3]]).as_matrix()
             max_rotation = max(max_rotation, float(np.linalg.norm(ra - rb)))
     if max_position > 1e-7 or max_rotation > 1e-7:
-        raise ValueError("Dataset wrist FK and native IK Link6 frames disagree")
+        raise ValueError("Dataset FK and native IK end frames disagree")
 
     # 2) From the IK home pose, move J1 of both arms by 1 deg through IK + guard;
     #    the closed loop must converge within 5 mm / 2 deg.
@@ -50,8 +50,8 @@ def check_kinematics(ik, guard_settings):
         raise ValueError("Native differential IK local roundtrip did not converge: " + str(residual))
     return {
         "samples": 64,
-        "target_frames": ["left_Link6", "right_Link6"],
-        "target_root_frame": "arm_origin",
+        "target_frames": ik.target_frames,
+        "target_root_frame": ik.ik_root_frame,
         "max_fk_position_difference_m": max_position,
         "max_fk_rotation_matrix_difference": max_rotation,
         "local_roundtrip": residual,

@@ -15,7 +15,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 
 from quicdeploy.common.io import load_json, sha256
-from quicdeploy.config.model import PHYSICAL_CONTRACT, compact_card, register
+from quicdeploy.config.model import PHYSICAL_CONTRACT, PIPERX_EE_CONTRACT, compact_card, register
 from quicdeploy.config.quicforge import (CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET,
                                        backbone_variant, code_paths, require, validate_inputs)
 
@@ -148,6 +148,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
     temporal = model_config.get("type") in {"TemporalLVADecoder", "CachedTemporalLVADecoder"}
     bundle_format = FORMAT
     sampling = None
+    physical = PHYSICAL_CONTRACT
     if temporal:
         from quicdeploy.config.temporal import FORMAT as TEMPORAL_FORMAT, validate_temporal
         bundle_format = TEMPORAL_FORMAT
@@ -158,7 +159,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
         if runtime_path.exists():
             raise FileExistsError(f"Temporal runtime already exists: {runtime_path}")
     else:
-        validate_inputs(model_config, inference, stats, training, manifest, conversion)
+        physical = validate_inputs(model_config, inference, stats, training, manifest, conversion, allow_piperx_ee=True)
     # COMPLETE is absent in the uploaded minimal copy; bind the raw weights by
     # independently checking its transfer digest, not a boolean "all_matched".
     # 上传精简副本可能不含 COMPLETE；读取并独立复算传输哈希，不信任 all_matched 布尔值。
@@ -174,8 +175,11 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite deployment bundle: {output}")
     if dry_run:
-        return {"model_type": model_config["type"], "epoch": manifest["epoch"],
-                "global_step": manifest["global_step"], "temporal_sampling": sampling}
+        inspection = {"model_type": model_config["type"], "epoch": manifest["epoch"],
+                      "global_step": manifest["global_step"], "temporal_sampling": sampling}
+        if physical == PIPERX_EE_CONTRACT:
+            inspection["hardware"] = "hardware/piper_x/ee/hardware.yaml"
+        return inspection
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".quicforge-import-", dir=output.parent) as tmp:
         bundle = Path(tmp) / "bundle"
@@ -201,7 +205,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
                       "source": {**provenance,
                                  "epoch": manifest["epoch"], "global_step": manifest["global_step"],
                                  "input_weights_sha256": hashes["weights.pt"]},
-                      "contract": {**PHYSICAL_CONTRACT, "horizon": 50, "action_dt_s": 1 / 30,
+                      "contract": {**physical, "horizon": 50, "action_dt_s": 1 / 30,
                                    "first_target_offset_s": 1 / 30, "fixed_prefix_steps": 10,
                                    "target_contract": TARGET, "history_frames": 1, "camera_map": CAMERA_MAP}}
         if temporal:
@@ -217,7 +221,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
         if card_path.exists():
             raise FileExistsError(f"Refusing to overwrite model card: {card_path}")
         relative = lambda p: os.path.relpath(p, card_path.parent)
-        model = {**PHYSICAL_CONTRACT, "id": card_path.stem,
+        model = {**physical, "id": card_path.stem,
                  "name": f"{training.get('experiment', {}).get('name', card_stem)} · Epoch {manifest['epoch']} · Step {manifest['global_step']} · {precision.upper()}",
                  "architecture": "DINOv3 + FM", "artifact_format": bundle_format,
                  "adapter": "quicdeploy.policy.quicforge:" + ("QuicForgeLVAAdapter" if precision == "fp32" else "QuicForgeLVAFP16Adapter"),

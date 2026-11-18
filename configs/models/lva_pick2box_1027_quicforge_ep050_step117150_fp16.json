@@ -8,7 +8,7 @@
     "../../models/quicforge/lva_pick2box_1027_quicforge_ep050_step117150/provenance/conversion_meta.json": "efbd35e76429e8d847aef493617a75445f895567b32be2da5938c1d50ef2e1de",
     "../../models/quicforge/lva_pick2box_1027_quicforge_ep050_step117150/provenance/training_config.json": "51dd77e4908afa858acc61e9da5e60d390e4157e8789bbd59c00af0c2a6ba553",
     "../../models/quicforge/lva_pick2box_1027_quicforge_ep050_step117150/weights.pt": "0246295f5d41f40f494cad683ff36dbdc2cf661ff8b9e556466354f3600091f8",
-    "../../quicdeploy/config/quicforge.py": "6e7b1f1b3ea6f18491d402d51667a02485ef5765e2d5c8b8bdef36dbe81bc01f",
+    "../../quicdeploy/config/quicforge.py": "d610436c8ee542f9c869dd4efb01bf8722f56395e730497390c1689adb950c54",
     "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "2cd62b197e56020ff5e789c9cd6b7c0ab8f21ae657a2137d9f3d5d4452849fb5",
     "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
     "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "6433084c766c2acb99cb153a4faf67caf533be1b172d9ff39832ba958ef548de",

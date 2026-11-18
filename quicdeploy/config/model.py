@@ -30,6 +30,13 @@ PHYSICAL_CONTRACT = {
     "gripper_unit": "mm",
     "rotation": "columns6d",
 }
+PIPERX_EE_CONTRACT = {
+    **PHYSICAL_CONTRACT,
+    "frame": "piperx_dual_root",
+    "ends": {"left": "left_ee_link", "right": "right_ee_link"},
+}
+PIPERX_EE_URDF_SHA256 = "4b2652c29a0ef48e97958137e6e85e1273055cae011b8a9df0078c80d98439c5"
+PIPERX_EE_JOINT_NAMES = [f"{side}_joint_{i}" for side in ("left", "right") for i in range(1, 7)]
 CAMERA_ORDER = ["left_wrist", "head", "right_wrist"]
 ARTIFACT_KEYS = ("weights", "normalization", "export_metadata")
 REQUIRED_KEYS = (
@@ -144,7 +151,10 @@ def validate_model(model):
             raise ValueError(f"Missing {key}: {model[key]}")
     if model["uses_language"] and not model.get("language"):
         raise ValueError("Language-conditioned model requires explicit language")
-    for key, value in PHYSICAL_CONTRACT.items():
+    physical = PHYSICAL_CONTRACT
+    if model.get("artifact_format") == "quicforge_lva_v1" and model["frame"] == PIPERX_EE_CONTRACT["frame"]:
+        physical = PIPERX_EE_CONTRACT
+    for key, value in physical.items():
         if model.get(key) != value:
             raise ValueError(f"Model physical contract mismatch: {key}")
     if model.get("output_domain") != "physical":

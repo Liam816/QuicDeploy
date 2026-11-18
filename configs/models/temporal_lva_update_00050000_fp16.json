@@ -8,7 +8,7 @@
     "../../models/quicforge/temporal_lva_update_00050000/provenance/conversion_meta.json": "3f2ff64a0835c1ca067a3ececde97172252b8daf8b1de55d5c17dd70e30b1b20",
     "../../models/quicforge/temporal_lva_update_00050000/provenance/training_config.json": "ebdf403d30c3a22137f5c6fb7c0e03302a92750b1842fe9a0ba0d93ff92028d8",
     "../../models/quicforge/temporal_lva_update_00050000/weights.pt": "858a75173434952bc08583502cd2797e06cab984c0a7129586a6f764c1185876",
-    "../../quicdeploy/config/quicforge.py": "6e7b1f1b3ea6f18491d402d51667a02485ef5765e2d5c8b8bdef36dbe81bc01f",
+    "../../quicdeploy/config/quicforge.py": "d610436c8ee542f9c869dd4efb01bf8722f56395e730497390c1689adb950c54",
     "../../quicdeploy/config/temporal.py": "0b96af685c43ce20665a3e17020bee6a8c2df13172944d33abfd02853645396a",
     "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "2cd62b197e56020ff5e789c9cd6b7c0ab8f21ae657a2137d9f3d5d4452849fb5",
     "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
