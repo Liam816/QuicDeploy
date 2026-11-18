@@ -61,6 +61,7 @@ class Joint:
     child: str
     origin: np.ndarray
     axis: list[float]
+    position_limits: tuple[float, float] | None = None
 
 
 class URDFFK:
@@ -78,6 +79,7 @@ class URDFFK:
             child_elem = joint_elem.find("child")
             origin_elem = joint_elem.find("origin")
             axis_elem = joint_elem.find("axis")
+            limit = joint_elem.find("limit")
             xyz = (
                 [float(value) for value in origin_elem.get("xyz", "0 0 0").split()]
                 if origin_elem is not None
@@ -100,6 +102,8 @@ class URDFFK:
                 child=child_elem.get("link") if child_elem is not None else "",
                 origin=make_transform(xyz, rpy),
                 axis=axis,
+                position_limits=(float(limit.attrib["lower"]), float(limit.attrib["upper"]))
+                if limit is not None and {"lower", "upper"} <= limit.attrib.keys() else None,
             )
             if joint.child in self.joint_by_child:
                 raise ValueError(f"URDF child link {joint.child!r} has more than one parent joint")

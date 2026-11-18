@@ -11,14 +11,17 @@ import json
 import os
 import socket
 import subprocess
+import time
 from pathlib import Path
 
 import numpy as np
+import yaml
 from scipy.spatial.transform import Rotation
 
 from ..common.geometry import rot6d, to6, validate_pose
-from ..common.layout import IK_JOINT_NAMES, JOINT_COLUMNS, SIDES
+from ..common.layout import EEF_GRIPPERS, GRIPPER_COLUMNS, IK_JOINT_NAMES, JOINT_COLUMNS, SIDES
 from ..config.model import PHYSICAL_CONTRACT
+from .piperx_ee import PiperXEEProjection
 from .urdf import URDFFK
 
 
@@ -31,22 +34,33 @@ class Kinematics:
         if config.get("solver_state_mode", "measured") not in ("measured", "reference"):
             raise ValueError("Unknown IK solver state mode")
         self.fk = URDFFK(Path(config["urdf"]))
-        # FK uses the trained pose frame. Only the legacy solver has a root offset.
-        # FK 使用训练位姿坐标系；旧版求解器的根节点另有固定偏移。
+        # Model anchors and RTC always use the exact training geometry.
+        # 模型锚点和 RTC 始终使用训练时的原始几何。
         self.frame = config.get("frame", PHYSICAL_CONTRACT["frame"])
         self.ik_root_frame = config.get("ik_root_frame", "arm_origin")
         self.target_frames = [config.get("ends", PHYSICAL_CONTRACT["ends"])[side] for side in SIDES]
         self.joint_names = config.get("joint_names", IK_JOINT_NAMES)
-        self.origin = self.fk.link_fk(self.frame, self.ik_root_frame, {})
-        import yaml
-
+        self.control_fk = self.fk
+        self.control_frame = self.frame
+        self.control_target_frames = self.target_frames
+        self.control_joint_names = self.joint_names
+        self.projector = None
+        self.projection_seed = None
+        if config.get("project_piperx_ee"):
+            self.control_fk = URDFFK(Path(config["native_urdf"]))
+            self.control_frame = PHYSICAL_CONTRACT["frame"]
+            self.control_target_frames = [PHYSICAL_CONTRACT["ends"][side] for side in SIDES]
+            self.control_joint_names = IK_JOINT_NAMES
+            self.projector = PiperXEEProjection(self.fk, self.frame, self.target_frames, self.joint_names,
+                                                self.control_fk, self.control_joint_names)
+        self.origin_inverse = np.linalg.inv(self.control_fk.link_fk(self.control_frame, self.ik_root_frame, {}))
         native = yaml.safe_load(Path(config["yaml"]).read_text())
         if native["model"]["root_frame"] != self.ik_root_frame:
             raise ValueError("Native IK frame changed")
         self.dt = float(config.get("control_dt_s", native["ik"]["dt"]))
         if not np.isfinite(self.dt) or not 0 < self.dt <= 0.05:
             raise ValueError("Invalid control timestep")
-        if native["model"]["tcp_frames"] != self.target_frames or native["model"].get("tcp_definitions"):
+        if native["model"]["tcp_frames"] != self.control_target_frames or native["model"].get("tcp_definitions"):
             raise ValueError("Deployment IK must control the configured end links directly without extra TCP offsets")
         self.sock, child = socket.socketpair()
         self.sock.settimeout(2)
@@ -71,7 +85,7 @@ class Kinematics:
         self.stream = self.sock.makefile("rwb")
         try:
             info = self.request("info")
-            if info["names"] != self.joint_names:
+            if info["names"] != self.control_joint_names:
                 raise ValueError("Native joint order mismatch")
             self.initial = np.array(info["initial_q"])
             self.joint_damping = info["joint_damping"]
@@ -97,31 +111,42 @@ class Kinematics:
     def reset(self, joints):
         """Re-seed the solver from measured joints. / 用实测关节重置求解器内部状态。"""
         joints = np.asarray(joints, dtype=float)
-        self.request("reset", q=np.deg2rad(joints[JOINT_COLUMNS]).tolist())
+        angles = np.deg2rad(joints[JOINT_COLUMNS])
+        self.request("reset", q=angles.tolist())
+        self.projection_seed = angles.reshape(2, 6) if self.projector else None
         self.reference_joints = joints.copy()
         self.reset_joints = joints.copy()
         self.joint_travel_deg = np.zeros(12)
 
     def wrist(self, joints):
         """14D joints (deg/mm) -> EEF20 in the trained pose frame. / 关节转为训练坐标系的 EEF20。"""
+        return self._wrist(joints, self.fk, self.frame, self.target_frames, self.joint_names)
+
+    def control_wrist(self, joints):
+        """14D encoder state -> physical control wrist pose. / 编码器关节状态转为控制末端位姿。"""
+        return self._wrist(joints, self.control_fk, self.control_frame, self.control_target_frames,
+                           self.control_joint_names)
+
+    @staticmethod
+    def _wrist(joints, fk, frame, ends, names):
         q = np.deg2rad(np.asarray(joints)[JOINT_COLUMNS])
-        values = dict(zip(self.joint_names, q, strict=True))
+        values = dict(zip(names, q, strict=True))
         pose = []
-        for end, grip in zip(self.target_frames, (6, 13), strict=True):
-            t = self.fk.link_fk(self.frame, end, values)
+        for end, grip in zip(ends, GRIPPER_COLUMNS, strict=True):
+            t = fk.link_fk(frame, end, values)
             pose.extend(t[:3, 3])
             pose.extend(to6(t[:3, :3]))
             pose.append(float(joints[grip]))
         return validate_pose([pose])[0]
 
     def ik_targets(self, wrist):
-        """EEF20 goal -> two solver-root [xyz, wxyz] targets. / EEF20 目标转为求解器根坐标系。"""
+        """Control EEF20 -> two solver-root [xyz, wxyz] targets. / 控制位姿转为求解器根坐标系。"""
         targets = []
         for b in (0, 10):
             t = np.eye(4)
             t[:3, 3] = wrist[b:b + 3]
             t[:3, :3] = rot6d(wrist[b + 3:b + 9])
-            wrist_in_root = np.linalg.inv(self.origin) @ t
+            wrist_in_root = self.origin_inverse @ t
             quat = Rotation.from_matrix(wrist_in_root[:3, :3]).as_quat()  # xyzw -> wxyz
             targets.append(np.r_[wrist_in_root[:3, 3], quat[3], quat[:3]].tolist())
         return targets
@@ -136,7 +161,15 @@ class Kinematics:
         reference 模式下从上一次接受的指令积分（与遥操作录制一致）；
         编码器反馈仍用于指令保护和模型锚点。
         """
-        left, right = self.ik_targets(target)
+        control_target = target
+        if self.projector is not None:
+            if self.projection_seed is None:
+                raise RuntimeError("PiperX EE projection requires reset from observed joints before motion")
+            started = time.perf_counter()
+            hint, projected, residual = self.projector.project(target, self.projection_seed)
+            control_target = self.control_wrist(hint)
+            projection_ms = (time.perf_counter() - started) * 1000
+        left, right = self.ik_targets(control_target)
         solver_joints = measured
         if self.config.get("solver_state_mode", "measured") == "reference":
             if self.reference_joints is None:
@@ -150,7 +183,11 @@ class Kinematics:
             raise RuntimeError("IK rejected: " + reply["detail"])
         out = np.asarray(measured, dtype=float).copy()
         out[JOINT_COLUMNS] = np.rad2deg(reply["q"])
-        out[[6, 13]] = target[[9, 19]]
+        out[GRIPPER_COLUMNS] = target[EEF_GRIPPERS]
+        if self.projector is not None:
+            self.projection_seed = projected
+            reply.update(control_wrist_target=control_target.tolist(), label_projection_residual=residual,
+                         label_projection_ms=projection_ms)
         if self.reference_joints is not None:
             self.joint_travel_deg += np.abs((out - self.reference_joints)[JOINT_COLUMNS])
         reply["joint_travel_from_reset_deg"] = self.joint_travel_deg.tolist()

@@ -14,10 +14,10 @@ physical_contract:
   rotation: columns6d
 robot_config: ../robot.json
 kinematics:
-  # Exact training URDF. Native IK stages its base proxies in a temporary copy.
-  # 训练 URDF 原件。原生 IK 只在临时副本中补底座代理。
+  # Keep the training URDF for labels and use dashboard Link6 for native IK.
+  # 训练标签沿用原始 URDF；原生 IK 使用 dashboard 的 Link6 控制链。
   urdf: piperx_bimanual.urdf
-  yaml: ik.yaml
+  yaml: ../ik.yaml
   # Deployment-only differential IK extension (provenance: build_manifest.json next to it).
   # It links pinocchio/coal from the quest3 env below, so it must run under that Python.
   # 仅用于部署的差分 IK 扩展（来源见同目录 build_manifest.json）；
@@ -34,6 +34,7 @@ can_adapter_serials:
 # Pinned files (relative to this file): any change must be reviewed and re-pinned here.
 # 被锁定的文件（相对本文件）：任何改动都需审核后在此更新哈希。
 artifacts:
-  ik.yaml: 71508ca2c5710a2b58de11393b5486754a5baa798bdd1a6fec4a45712026eece
+  ../ik.yaml: 7d37109c1db2b9b112422707a8771bd6d70dc106cdb1c47650c8370f3838628c
+  ../piper_bimanual.urdf: b403c8b8fed2e191eef8dd4d30b7f0858da0f1e10187a2dc1ef6c77ca26c3f13
   piperx_bimanual.urdf: 4b2652c29a0ef48e97958137e6e85e1273055cae011b8a9df0078c80d98439c5
   ../../../../third_party/piper_differential_ik/piper_differential_ik.cpython-312-x86_64-linux-gnu.so: a98292e24fac8b99f333a906ddea51971571c7773dceef575f616d91ca2afe23

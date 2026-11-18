@@ -17,11 +17,13 @@ from pathlib import Path
 import numpy as np
 
 from ..common.io import digest, load_json, load_yaml, resolve_path, sha256
+from ..common.layout import IK_JOINT_NAMES, SIDES
 from ..common.validation import is_int, is_number, validate_gripper_binary_thresholds, validate_gripper_speed
 from .model import PHYSICAL_CONTRACT, PIPERX_EE_CONTRACT, PIPERX_EE_JOINT_NAMES, PIPERX_EE_URDF_SHA256, load_model_card
 from .defaults import OPTIONAL_DEFAULTS
 
 MODES = ("sync", "async", "rtc")
+PIPER_CONTROL_URDF_SHA256 = "b403c8b8fed2e191eef8dd4d30b7f0858da0f1e10187a2dc1ef6c77ca26c3f13"
 SECTION_KEYS = {
     "runtime": {"device", "cpu_threads"},
     "observation": {"max_camera_age_ms", "max_camera_skew_ms", "max_joint_age_ms"},
@@ -161,35 +163,38 @@ def load_hardware(hardware_path, sources):
     kinematics["extension_dir"] = str(Path(kinematics["extension"]).parent)
     ik_parameters = load_yaml(kinematics["yaml"])
     sources[kinematics["yaml"]] = sha256(kinematics["yaml"])
-    # The native IK reads its URDF from ik.yaml; it must be the same geometry as FK.
-    # 原生 IK 从 ik.yaml 读取 URDF，必须与 FK 使用的几何完全一致。
-    kinematics["native_urdf"] = str(resolve_path(ik_parameters["model"]["urdf_path"], kinematics["yaml"]))
+    # The PiperX EE label profile is the sole exception to shared FK/IK geometry.
+    # 仅 PiperX EE 标签配置分开使用训练 FK 和控制 IK 的几何。
+    ik_model = ik_parameters["model"]
+    kinematics["native_urdf"] = str(resolve_path(ik_model["urdf_path"], kinematics["yaml"]))
     if not Path(kinematics["native_urdf"]).is_file():
         raise ValueError(f"Missing IK URDF: {kinematics['native_urdf']}")
-    if sha256(kinematics["native_urdf"]) != sha256(kinematics["urdf"]):
-        raise ValueError("ik.yaml urdf_path differs from the FK URDF; FK and IK frames would disagree")
     for key in ("urdf", "native_urdf", "extension"):
         sources[kinematics[key]] = sha256(kinematics[key])
+    label_digest = sources[kinematics["urdf"]]
+    control_digest = sources[kinematics["native_urdf"]]
     if piperx_ee:
-        if sources[kinematics["urdf"]] != PIPERX_EE_URDF_SHA256:
-            raise ValueError("PiperX EE hardware profile requires the pinned training URDF")
-        ik_model = ik_parameters["model"]
-        if (ik_model["root_frame"] != physical["frame"]
-                or ik_model["tcp_frames"] != [physical["ends"][side] for side in ("left", "right")]
-                or ik_model["controlled_joints"] != PIPERX_EE_JOINT_NAMES
+        if label_digest != PIPERX_EE_URDF_SHA256 or control_digest != PIPER_CONTROL_URDF_SHA256:
+            raise ValueError("PiperX EE hardware requires the pinned training and dashboard control URDFs")
+        if (ik_model["root_frame"] != "arm_origin"
+                or ik_model["tcp_frames"] != [PHYSICAL_CONTRACT["ends"][side] for side in SIDES]
+                or ik_model["controlled_joints"] != IK_JOINT_NAMES
                 or ik_model.get("tcp_definitions")):
-            raise ValueError("PiperX EE IK frames or joint order differ from the training URDF")
+            raise ValueError("PiperX EE IK must control dashboard Link6 in native encoder joint order")
         kinematics.update(frame=physical["frame"], ends=deepcopy(physical["ends"]),
-                          ik_root_frame=physical["frame"], joint_names=PIPERX_EE_JOINT_NAMES.copy(),
-                          native_base_proxies=True)
+                          joint_names=PIPERX_EE_JOINT_NAMES.copy(), project_piperx_ee=True)
+    elif label_digest != control_digest:
+        raise ValueError("ik.yaml urdf_path differs from the FK URDF; FK and IK frames would disagree")
     if robot["robot"].get("log_dir"):
         robot["robot"]["log_dir"] = str(resolve_path(robot["robot"]["log_dir"], robot_path))
     initial = robot["robot"].get("initial_pose_file")
     if initial:
         robot["robot"]["initial_pose_file"] = str(resolve_path(initial, robot_path))
         sources[robot["robot"]["initial_pose_file"]] = sha256(robot["robot"]["initial_pose_file"])
-    for file, expected in hardware["artifacts"].items():
-        file = str(resolve_path(file, hardware_path))
+    artifacts = {str(resolve_path(file, hardware_path)): digest for file, digest in hardware["artifacts"].items()}
+    if piperx_ee and any(kinematics[key] not in artifacts for key in ("urdf", "native_urdf", "yaml", "extension")):
+        raise ValueError("PiperX EE hardware requires artifact pins for both URDFs, IK parameters and extension")
+    for file, expected in artifacts.items():
         if sha256(file) != expected:
             raise ValueError(f"Hardware artifact changed: {file}")
     return {

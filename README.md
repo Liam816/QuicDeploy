@@ -88,7 +88,8 @@ configs/
   runtime.yaml / lva_*.yaml   模型选择 + 按需参数覆盖
   models/*.json              模型契约 + metadata 溯源 + 产物 SHA-256
   hardware/piper_x/          hardware.yaml · robot.json · ik.yaml · initial_pose.json
-                             piper_bimanual.urdf（FK 与原生 IK 共用的双臂 URDF）
+                             piper_bimanual.urdf（dashboard Link6 控制几何）
+                             ee/（PiperX EE 模型的训练几何与硬件配置）
 scripts/  setup_env.sh · start_live.sh
 tests/    test_core.py（纯单元）· test_live_simulated.py（模拟机械臂端到端）
 tools/    compare_with_legacy.py（与旧实现逐项对比）· audit_model_files.py（实际模型文件审计）
@@ -98,6 +99,9 @@ outputs/  live/<时间>_<模式>/ 每次运行的配置快照、commands.jsonl�
 ```
 
 ## 配置 / Configuration
+
+PiperX EE 模型的训练位姿与 dashboard Link6 控制几何、关节零位约定和回放结果见
+[PiperX EE 控制适配](docs/piperx_ee_control.md)。
 
 * v2 运行配置通过 `extends: defaults.yaml` 继承公共策略，仅填写模型选择和差异；相对路径归声明文件所有。
   未知字段、循环继承和缺失保护阈值仍报错；旧 v1 完整配置继续支持。
