@@ -12,6 +12,7 @@ Observation pickling + IPC also run on a helper thread, so submit() returns at o
 import multiprocessing
 import time
 import traceback
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -21,11 +22,20 @@ def worker_main(connection, config):
         from .base import load_adapter
 
         adapter = load_adapter(config)
-        connection.send({"kind": "ready"})
+        started = time.monotonic()
+        if hasattr(adapter, "warmup"):
+            adapter.warmup()
+        connection.send({"kind": "ready", "warmup_s": time.monotonic() - started})
+        background_frames, background_s = 0, 0.0
         while True:
             request = connection.recv()
             if request is None:
                 return
+            if request.get("kind") == "vision":
+                started = time.monotonic()
+                background_frames += int(adapter.observe_vision(request["sample"]))
+                background_s += time.monotonic() - started
+                continue
             started = time.monotonic()
             raw = validate_pose(adapter.infer(request["observation"], request["context"]))
             if len(raw) > config["horizon"]:
@@ -35,6 +45,15 @@ def worker_main(connection, config):
                 "inference_s": time.monotonic() - started,
                 "anchor": request["observation"]["eef_state"],
             }
+            if config.get("temporal_sampling"):
+                stats = adapter.history_diagnostics
+                reply["vision_cache"] = {
+                    "new_frame_encodings": stats["new_frame_encodings"],
+                    "cached_frames": stats["cached_frames"],
+                    "startup_padding_slots": stats.get("startup_padding_slots", 0),
+                    "frame_index": adapter.last_frame_index,
+                    "background_frames": background_frames, "background_ms": background_s * 1000}
+                background_frames, background_s = 0, 0.0
             if config.get("record_diagnostics", False):
                 reply.update(diagnostics=getattr(adapter, "inference_diagnostics", {}),
                              inference_started_at=started, inference_finished_at=time.monotonic())
@@ -55,6 +74,11 @@ class InferenceWorker:
         self.process = ctx.Process(target=worker_main, args=(child, config), daemon=True)
         self.pending = None   # (request id, submitted_at) / (请求号, 提交时刻)
         self.counter = 0
+        self.temporal_sampling = config.get("temporal_sampling")
+        self._vision_session = None
+        self._vision_index = None
+        self._vision_known = set()
+        self._vision_sends = deque()
         self._sender = ThreadPoolExecutor(max_workers=1, thread_name_prefix="policy-observation")
         self._send_future = None
         self.process.start()
@@ -62,7 +86,8 @@ class InferenceWorker:
         try:
             if not self.connection.poll(startup_timeout_s):
                 raise TimeoutError("Model worker did not initialize")
-            if self._receive()["kind"] != "ready":
+            self.startup_info = self._receive()
+            if self.startup_info["kind"] != "ready":
                 raise RuntimeError("Invalid worker initialization")
         except BaseException:
             self.close()
@@ -80,7 +105,51 @@ class InferenceWorker:
             raise RuntimeError("Only one outstanding inference is allowed")
         self.counter += 1
         self.pending = (self.counter, time.monotonic())
-        self._send_future = self._sender.submit(self._send, self.counter, observation, context)
+        self._check_vision_sends()
+        packed = self._compact_observation(observation)
+        self._send_future = self._sender.submit(self._send, self.counter, packed, context)
+
+    def vision_cursor(self, session):
+        return self._vision_index if self._vision_session == session else None
+
+    def _check_vision_sends(self):
+        while self._vision_sends and self._vision_sends[0].done():
+            self._vision_sends.popleft().result()
+
+    def offer_vision(self, sample):
+        """Bounded, nonblocking enqueue; same FIFO sender as action requests."""
+        if not self.temporal_sampling:
+            return False
+        self._check_vision_sends()
+        if not self.process.is_alive():
+            raise RuntimeError("Inference worker exited during vision update")
+        session, index = sample["session"], sample["frame_index"]
+        if session == self._vision_session and self._vision_index is not None and index <= self._vision_index:
+            return True
+        if len(self._vision_sends) >= 4:
+            return False
+        future = self._sender.submit(self.connection.send, {"kind": "vision", "sample": sample})
+        self._vision_sends.append(future)
+        if session != self._vision_session:
+            self._vision_session, self._vision_known = session, set()
+        self._vision_index = index
+        self._vision_known.add(index)
+        span = (self.temporal_sampling["history_frames"] - 1) * self.temporal_sampling["history_stride"]
+        self._vision_known = {i for i in self._vision_known if i >= index - span}
+        return True
+
+    def _compact_observation(self, observation):
+        history = observation.get("vision_history")
+        if not self.temporal_sampling or history is None or history["session"] != self._vision_session:
+            return observation
+        # FIFO guarantees each omitted image was encoded by an earlier message.
+        samples = [{k: v for k, v in sample.items()
+                    if k != "images" or sample["frame_index"] not in self._vision_known}
+                   for sample in history["samples"]]
+        packed = dict(observation, vision_history=dict(history, samples=samples))
+        if history["frame_index"] in self._vision_known:
+            packed["images"] = {}
+        return packed
 
     def _send(self, index, observation, context):
         self.connection.send(dict(id=index, observation=observation, context=context))

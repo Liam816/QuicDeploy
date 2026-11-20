@@ -75,7 +75,7 @@ def validate_temporal(model, inference, stats, training, checkpoint, conversion)
 def code_paths():
     project = Path(__file__).resolve().parents[2]
     files = [project / p for p in (
-        "quicdeploy/policy/temporal.py", "quicdeploy/policy/lva.py", "quicdeploy/config/temporal.py",
+        "quicdeploy/policy/temporal.py", "quicdeploy/policy/lva.py", "quicdeploy/policy/worker.py", "quicdeploy/config/temporal.py",
         "quicdeploy/config/quicforge.py", "quicdeploy/policy/backends/temporal_lva.py",
         "quicdeploy/runtime/observer.py", "quicdeploy/runtime/live.py", "quicdeploy/robot/piper/camera.py",
         "quicdeploy/policy/backends/quicforge_lva/decoder.py",

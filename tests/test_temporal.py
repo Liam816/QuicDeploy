@@ -37,6 +37,8 @@ def test_exact_sampling_and_padding_uses_this_current_frame(stride, current, exp
     obs = observer(stride)
     span = 15 * stride
     populate(obs, 0, current)
+    # This test exercises an already-started token history, not a cold first request.
+    obs._history(0, {name: np.array([0]) for name in obs.frames})
     images = {name: np.array([current]) for name in obs.frames}
     hist = obs._history(current / 30, images)
     assert hist["time_offsets"] == list(range(-span, 1, stride))
@@ -51,6 +53,7 @@ def test_source_gap_and_historical_camera_skew_fail(stride):
     obs = observer(stride)
     span = 15 * stride
     populate(obs, 0, span)
+    obs._history(0, {name: np.array([0]) for name in obs.frames})
     obs.frames["head"] = deque((s, im) for s, im in obs.frames["head"] if s != 8 / 30)
     with pytest.raises(RuntimeError, match="acquisition gap"):
         obs._history(span / 30, {})
@@ -276,6 +279,7 @@ def test_override_requires_explicit_boolean_opt_in(temporal_bundle, allow):
 def test_stride_one_uses_latest_source_frame(monkeypatch):
     obs = observer(1)
     populate(obs, 0, 20)
+    obs._history(0, {})
     monkeypatch.setattr("quicdeploy.runtime.observer.time.monotonic", lambda: 20 / 30 + .001)
     assert obs._prediction_stamp() == 20 / 30
     history = obs._history(20 / 30, {})

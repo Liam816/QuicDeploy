@@ -28,6 +28,8 @@ class SynchronizedObserver:
         self.session = uuid.uuid4().hex
         self.head_indices = {}
         self.first_frame_index = None
+        self.history_first_frame_index = None
+        self.history_session = None
         capacity = 12
         if self.temporal:
             capacity += (self.temporal["history_frames"] - 1) * self.temporal["history_stride"]
@@ -103,6 +105,38 @@ class SynchronizedObserver:
         """Wait for a fresh anchor on one source-stride phase, preserving cache reuse."""
         return self._prediction_stamp() is not None
 
+    def vision_updates(self, after_index=None):
+        """Unsent real grid frames, without FK or copying camera arrays.
+
+        First inference establishes the session origin. These updates maintain
+        the exact video-frame sampling between subsequent action requests.
+        """
+        if not self.temporal or self.history_first_frame_index is None:
+            return []
+        stamp = self._prediction_stamp()
+        if stamp is None:
+            return []
+        current = self.head_indices[stamp]
+        stride = self.temporal["history_stride"]
+        start = self.history_first_frame_index if after_index is None else after_index + stride
+        heads = {self.head_indices[t]: (t, image) for t, image in self.frames["head"]}
+        updates = []
+        for index in range(start, current + 1, stride):
+            if index not in heads:
+                raise RuntimeError(f"Temporal vision encoding fell behind at source frame {index}")
+            head_stamp, head = heads[index]
+            images, stamps = {"head": head}, [head_stamp]
+            for name, queue in self.frames.items():
+                if name != "head":
+                    other_stamp, image = min(queue, key=lambda frame: abs(frame[0] - head_stamp))
+                    images[name] = image
+                    stamps.append(other_stamp)
+            if (max(stamps) - min(stamps)) * 1000 > self.limits["max_camera_skew_ms"]:
+                raise RuntimeError(f"Temporal vision camera skew at source frame {index}")
+            updates.append({"session": self.session, "frame_index": index,
+                            "timestamp": head_stamp, "images": images})
+        return updates
+
     def capture(self, *, for_prediction=False):
         """Return (observation, joints) aligned to the newest head frame.
         返回以最新头部帧对齐的 (观测, 关节)。
@@ -140,13 +174,18 @@ class SynchronizedObserver:
 
     def _history(self, head_stamp, current_images):
         current = self.head_indices[head_stamp]
+        # Acquisition may have been running before the first policy request.
+        # Token history starts with the first prediction, not camera warm-up.
+        if self.history_session != self.session:
+            self.history_first_frame_index = current
+            self.history_session = self.session
         count, stride = self.temporal["history_frames"], self.temporal["history_stride"]
         offsets = list(range(-(count - 1) * stride, 1, stride))
         heads = {self.head_indices[stamp]: (stamp, image) for stamp, image in self.frames["head"]}
         samples = []
         for offset in offsets:
             wanted = current + offset
-            if wanted < self.first_frame_index:
+            if wanted < self.history_first_frame_index:
                 samples.append({"frame_index": current, "images": current_images})
                 continue
             if wanted not in heads:
@@ -164,5 +203,5 @@ class SynchronizedObserver:
             samples.append({"frame_index": wanted, "images": images})
         # Camera frames are immutable arrays after publication; retain references
         # here. Pickling/copying happens on InferenceWorker's sender thread.
-        return {"session": self.session, "frame_index": current, "first_frame_index": self.first_frame_index,
+        return {"session": self.session, "frame_index": current, "first_frame_index": self.history_first_frame_index,
                 "time_offsets": offsets, "samples": samples}

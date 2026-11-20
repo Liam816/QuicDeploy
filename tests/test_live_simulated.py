@@ -106,6 +106,14 @@ class FakeWorker:
     def __init__(self, config):
         self.pending = None
         self.temporal = config.get("temporal_sampling")
+        self.vision_session, self.vision_index = None, None
+
+    def vision_cursor(self, session):
+        return self.vision_index if session == self.vision_session else None
+
+    def offer_vision(self, sample):
+        self.vision_session, self.vision_index = sample["session"], sample["frame_index"]
+        return True
 
     def submit(self, observation, context):
         assert self.pending is None

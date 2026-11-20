@@ -39,6 +39,8 @@ class InferenceMetrics:
         event = {"sequence": count + 1, "step": step, "completed_at": now,
                  "latency_ms": latency, "model_ms": _milliseconds(reply.get("inference_s")),
                  "latency_equivalent_hz": None if latency is None else 1000 / latency}
+        if reply.get("vision_cache") is not None:
+            event["vision_cache"] = dict(reply["vision_cache"])
         self._state = (count + 1, times, event)
         snapshot = self.snapshot(now=now)
         if self._thread is not None:
@@ -63,12 +65,15 @@ class InferenceMetrics:
         def value(key, places):
             number = event.get(key)
             return "n/a" if number is None else f"{number:.{places}f}"
+        cache = event.get("vision_cache")
+        suffix = (f" vision_new={cache['new_frame_encodings']} background_new={cache['background_frames']}"
+                  if cache is not None else "")
         return (f"[inference #{event['sequence']:06d} step={event.get('step')}] "
                 f"latency={value('latency_ms', 1)} ms "
                 f"model={value('model_ms', 1)} ms "
                 f"equivalent={value('latency_equivalent_hz', 2)} Hz "
                 f"completed_5s={event['window_completed']} "
-                f"frequency_5s={value('frequency_hz', 2)} Hz")
+                f"frequency_5s={value('frequency_hz', 2)} Hz" + suffix)
 
     def _write_logs(self):
         writable = True

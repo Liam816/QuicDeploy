@@ -346,6 +346,11 @@ class LiveSession:
 
     def _async_tick(self, loop_start, sample_done):
         self.rec.check_writes()
+        if self.config["model"].get("temporal_sampling") and hasattr(self.worker, "offer_vision"):
+            cursor = self.worker.vision_cursor(self.observer.session)
+            for sample in self.observer.vision_updates(cursor):
+                if not self.worker.offer_vision(sample):
+                    break
         self._poll_reply()
         poll_done = time.monotonic()
         request_parts = None

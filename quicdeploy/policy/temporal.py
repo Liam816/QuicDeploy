@@ -42,6 +42,47 @@ class TemporalLVAAdapter(LVAAdapter):
         self.tokens = OrderedDict()
         self.session = None
         self.last_frame_index = None
+        self.first_token_frame_index = None
+
+    def warmup(self):
+        """Initialize CUDA kernels before ready/arm connection, without history."""
+        torch = self.torch
+        count, stride = self.sampling["history_frames"], self.sampling["history_stride"]
+        precision = torch.autocast("cuda", dtype=torch.float16) if self._fp16 else nullcontext()
+        with torch.inference_mode(), precision:
+            image = torch.zeros((1, 3, 448, 1824), device=self.config["device"])
+            slots = self.model._encode_frame(image)[:, None].expand(-1, count, -1, -1)
+            packed = {"frame_slots": slots,
+                      "valid_mask": torch.ones((1, count), dtype=torch.bool, device=slots.device),
+                      "time_offsets": torch.tensor([list(range(-(count - 1) * stride, 1, stride))],
+                                                   device=slots.device, dtype=torch.float32)}
+            self.model.inference(packed, noise=torch.zeros((1, 50, 20), device=slots.device),
+                                 delay=0, num_steps=10, guidance_scale=0)
+        if self.config["device"] == "cuda":
+            torch.cuda.synchronize()
+
+    def observe_vision(self, sample):
+        """Encode one source-grid frame independently of action requests."""
+        if sample["session"] != self.session or self.first_token_frame_index is None:
+            raise ValueError("Vision update requires an initialized prediction session")
+        index = sample["frame_index"]
+        stride = self.sampling["history_stride"]
+        if index < self.first_token_frame_index or (index - self.first_token_frame_index) % stride:
+            raise ValueError("Vision update is outside the source-frame sampling grid")
+        if index in self.tokens:
+            return False
+        torch = self.torch
+        precision = torch.autocast("cuda", dtype=torch.float16) if self._fp16 else nullcontext()
+        with torch.inference_mode(), precision:
+            image = torch.from_numpy(self.preprocess(sample["images"])).to(self.config["device"])
+            self.tokens[index] = self.model._encode_frame(image).detach()
+        if self.config["device"] == "cuda":
+            torch.cuda.synchronize()
+        earliest = index - (self.sampling["history_frames"] - 1) * stride
+        for old in list(self.tokens):
+            if old < earliest:
+                del self.tokens[old]
+        return True
 
     def _image_input(self, observation):
         """Lazily encode only uncached observations, before relative time is added.
@@ -62,33 +103,52 @@ class TemporalLVAAdapter(LVAAdapter):
         expected = list(range(-(count - 1) * stride, 1, stride))
         if history["time_offsets"] != expected or len(history["samples"]) != count:
             raise ValueError("Temporal observations do not match the training sampling contract")
-        slots, encoded = [], 0
+        if self.first_token_frame_index is None:
+            self.first_token_frame_index = current
+        first = max(self.first_token_frame_index, history["first_frame_index"])
+        current_sample = history["samples"][-1]
+        if current_sample["frame_index"] != current:
+            raise ValueError("Temporal history must end with the current frame")
+        resolved, padding = [], 0
+        for offset, sample in zip(expected, history["samples"]):
+            index = sample["frame_index"]
+            if index > current or index < 0:
+                raise ValueError("Temporal history contains invalid/future frame indices")
+            wanted = current + offset
+            if wanted < first:
+                # No retrospective encoding before this token session began.
+                # Always reuse THIS request's latest token for absent slots.
+                resolved.append(current_sample)
+                padding += 1
+            else:
+                if index != wanted:
+                    raise ValueError("Only missing startup history may use current-frame padding")
+                resolved.append(sample)
+        encoded = 0
         precision = torch.autocast("cuda", dtype=torch.float16) if self._fp16 else nullcontext()
         with torch.inference_mode(), precision:
             # Encode current first so all startup slots can reuse its tokens.
-            for sample in reversed(history["samples"]):
-                index = sample["frame_index"]
-                if index > current or index < 0:
-                    raise ValueError("Temporal history contains invalid/future frame indices")
+            unique = {sample["frame_index"]: sample for sample in reversed(resolved)}
+            for index, sample in unique.items():
                 if index not in self.tokens:
                     image = torch.from_numpy(self.preprocess(sample["images"])).to(self.config["device"])
                     self.tokens[index] = self.model._encode_frame(image).detach()
                     encoded += 1
-            for offset, sample in zip(expected, history["samples"]):
-                index = sample["frame_index"]
-                wanted = current + offset
-                if index != wanted and not (wanted < history["first_frame_index"] and index == current):
-                    raise ValueError("Only missing startup history may use current-frame padding")
-                slots.append(self.tokens[index])
-            frame_slots = torch.stack(slots, dim=1)
+            if padding == count - 1:
+                # A broadcast view shares one computed token across all slots.
+                frame_slots = self.tokens[current][:, None].expand(-1, count, -1, -1)
+            else:
+                slots = [self.tokens[sample["frame_index"]] for sample in resolved]
+                frame_slots = torch.stack(slots, dim=1)
         earliest = current - (count - 1) * stride
         for index in list(self.tokens):
             if index < earliest:
                 del self.tokens[index]
         self.last_frame_index = current
-        self.history_diagnostics = {"history_frame_indices": [s["frame_index"] for s in history["samples"]],
+        self.history_diagnostics = {"history_frame_indices": [s["frame_index"] for s in resolved],
                                     "time_offsets": expected, "new_frame_encodings": encoded,
-                                    "cached_frames": len(self.tokens)}
+                                    "cached_frames": len(self.tokens), "startup_padding_slots": padding,
+                                    "first_token_frame_index": self.first_token_frame_index}
         return {"frame_slots": frame_slots,
                 "valid_mask": torch.ones((1, count), dtype=torch.bool, device=frame_slots.device),
                 "time_offsets": torch.tensor([expected], dtype=torch.float32, device=frame_slots.device)}
