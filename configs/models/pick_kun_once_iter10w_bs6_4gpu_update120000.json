@@ -1,0 +1,105 @@
+{
+  "artifacts": {
+    "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/deployment_manifest.json": "cc9fdee9a18831253b5fc9c34fa60cc7c89f3cae92e1a7ae2cd57ef2631f0baa",
+    "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/inference_config.json": "a81e9713bae7e36e0b6af91cd1c916441662633b12faf0501bbfc83b722b5dbc",
+    "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/model_config.json": "ea8f8d95c33fded10ad9406550e0d117145bda65309859cd4000008752a90c68",
+    "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/normalization.json": "e3832412969242cdef205aadd2d989de01e14c8b5e641048c42f9bcb4e7daf24",
+    "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/provenance/checkpoint.json": "726ecbdc1ebe57daab513dcf117da1a28d551a52c26682593381ef3d3370eb11",
+    "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/provenance/conversion_meta.json": "b2d4218f063c81f5848b5c3667c42c127dec4782a9a66368e574da90b7c492e6",
+    "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/provenance/training_config.json": "5386981bc6504635f4e81aae827ee69cd9affce0521ff3f913538a92350e2b84",
+    "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/weights.pt": "5e797461f5e6673a5e3f34de5a9e672eda946342a7104f1eb6a41c586467c832",
+    "../../quicdeploy/config/quicforge.py": "d610436c8ee542f9c869dd4efb01bf8722f56395e730497390c1689adb950c54",
+    "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "2cd62b197e56020ff5e789c9cd6b7c0ab8f21ae657a2137d9f3d5d4452849fb5",
+    "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
+    "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "6433084c766c2acb99cb153a4faf67caf533be1b172d9ff39832ba958ef548de",
+    "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+    "../../quicdeploy/policy/backends/quicforge_lva/model.py": "e3a3d3aca38b7290b5195ce2deb02df2875ff5cc2f838a092717adca3aa02ce5",
+    "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+    "../../quicdeploy/policy/lva.py": "d9a4793385124fc87d3bbf964217cb79d061faf240a64790200442681c4e0e13",
+    "../../quicdeploy/policy/quicforge.py": "96ad813a031208743af01f0b43e4d4e0f3d6e8ce24e51c1675fa26f9dfda88ad"
+  },
+  "metadata": {
+    "architecture": "DINOv3 + FM",
+    "checkpoint": {
+      "epoch": 164,
+      "global_step": 120000
+    },
+    "dataset_split": "training_replay",
+    "demo": false,
+    "name": "pick_kun_once_iter10w_bs6_4gpu · Epoch 164 · Step 120000 · FP16"
+  },
+  "model": {
+    "action_dt_s": 0.03333333333333333,
+    "adapter": "quicdeploy.policy.quicforge:QuicForgeLVAFP16Adapter",
+    "artifact_dir": "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000",
+    "artifact_format": "quicforge_lva_v1",
+    "cameras": [
+      "left_wrist",
+      "head",
+      "right_wrist"
+    ],
+    "ends": {
+      "left": "left_Link6",
+      "right": "right_Link6"
+    },
+    "export_metadata": "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/deployment_manifest.json",
+    "fixed_prefix_steps": 10,
+    "frame": "world",
+    "gripper_unit": "mm",
+    "horizon": 50,
+    "id": "pick_kun_once_iter10w_bs6_4gpu_update120000",
+    "implementation_files": [
+      "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/inference_config.json",
+      "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/model_config.json",
+      "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/provenance/checkpoint.json",
+      "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/provenance/conversion_meta.json",
+      "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/provenance/training_config.json",
+      "../../quicdeploy/policy/backends/quicforge_lva/__init__.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/model.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/decoder.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json",
+      "../../quicdeploy/policy/quicforge.py",
+      "../../quicdeploy/policy/lva.py",
+      "../../quicdeploy/config/quicforge.py"
+    ],
+    "normalization": "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/normalization.json",
+    "output_domain": "physical",
+    "position_unit": "m",
+    "preprocessing": {
+      "crop": [
+        16,
+        16,
+        448,
+        608
+      ],
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "protocol": "eef20_relative",
+    "rotation": "columns6d",
+    "runtime_versions": {
+      "numpy": "2.2.6",
+      "torch": "2.11.0+cu128"
+    },
+    "supervision": "action",
+    "target_contract": {
+      "anchor_pose_source": "state",
+      "first_target_offset_steps": 1,
+      "pose_source": "action"
+    },
+    "timing_domain": "stored_recording_time",
+    "weights": "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/weights.pt",
+    "weights_sha256": "5e797461f5e6673a5e3f34de5a9e672eda946342a7104f1eb6a41c586467c832"
+  },
+  "schema_version": 2
+}

@@ -1,0 +1,4 @@
+# Generated model profile / 自动生成的模型配置
+schema_version: 2
+extends: defaults.yaml
+model: models/pick2box_action_gt_full_iter8w_1027_quicforge_update00080000.json

@@ -1,0 +1,4 @@
+# Generated model profile / 自动生成的模型配置
+schema_version: 2
+extends: defaults.yaml
+model: models/pick_kun_once_iter10w_bs6_4gpu_update120000.json
