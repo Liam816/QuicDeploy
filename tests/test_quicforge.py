@@ -190,6 +190,7 @@ def test_resolve_rejects_training_deployment_urdf_mismatch(bundle, tmp_path, mon
 
 @pytest.mark.parametrize("change,match", [
     ("missing", "cover every training dataset"), ("order", "dataset identity"),
+    ("unbound_output", "dataset identity"),
     ("fps", "dataset physical contract.fps"), ("urdf", "dataset physical contract.kinematics"),
     ("units", "dataset physical contract.pose_labels"), ("duplicate", "Duplicate training dataset"),
 ])
@@ -202,11 +203,32 @@ def test_multidataset_metadata_cannot_hide_mismatch(bundle, change, match):
     conversion = {**first, "dataset_sources": [first, second]}
     if change == "missing": conversion.pop("dataset_sources")
     if change == "order": conversion["dataset_sources"] = [second, first]
+    if change == "unbound_output": training["data"]["datasets"][0]["label_file"] = "/data/task_kvdb_fix/label.pkl"
     if change == "fps": second["fps"] = 60
     if change == "urdf": second["kinematics"]["urdf_sha256"] = "different"
     if change == "units": second["pose_labels"]["gripper_unit"] = "meters"
     if change == "duplicate": training["data"]["datasets"][1] = training["data"]["datasets"][0]
     write(root / "provenance/training_config.json", training)
+    write(root / "provenance/conversion_meta.json", conversion)
+    with pytest.raises(ValueError, match=match):
+        load_bundle(config, verify_hashes=False)
+
+
+@pytest.mark.parametrize("change,match", [
+    ("same_basename_wrong_path", "aggregated conversion dataset order"),
+    ("metadata_changed", "aggregated conversion source metadata"),
+])
+def test_bundle_requires_aggregate_bindings_at_load(bundle, change, match):
+    config, root, values = bundle
+    metadata = values["provenance/conversion_meta.json"]
+    label = values["provenance/training_config.json"]["data"]["datasets"][0]["label_file"]
+    entry = {"label_file": label, "metadata_available": True, "metadata": copy.deepcopy(metadata)}
+    conversion = {**metadata, "dataset_sources": [metadata], "quicforge_primary_source": 0,
+                  "quicforge_sources": [entry]}
+    if change == "same_basename_wrong_path":
+        entry["label_file"] = "/elsewhere/task_kvdb/label.pkl"
+    else:
+        entry["metadata"]["source_dataset"] = "/data/unrelated"
     write(root / "provenance/conversion_meta.json", conversion)
     with pytest.raises(ValueError, match=match):
         load_bundle(config, verify_hashes=False)

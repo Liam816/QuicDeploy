@@ -28,6 +28,9 @@ checkpoint_dir/
 
 支持现有适配器已验证的单帧 `LVADecoder`、`TemporalLVADecoder` 和 `CachedTemporalLVADecoder`，
 包括单数据集、`dataset_sources` 多来源和 `quicforge_sources` 汇总转换元数据。
+有 `quicforge_sources` 时，导入和加载按训练顺序核对每项的完整 `label_file` 路径及绑定的转换元数据，
+因此可使用 `*_kvdb_fix` 等自定义输出目录。转换元数据的 `source_dataset` 继续记录原始 LeRobot 目录。
+旧格式未记录实际标签路径时，按原始目录名加 `_kvdb` 核对。
 模型结构、采样或坐标契约不受支持时，导入会报错，不会从文件名猜测兼容性。
 
 缓存训练的 ViT-L/16 模型保持训练特征和骨干精度，见

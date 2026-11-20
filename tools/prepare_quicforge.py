@@ -17,7 +17,8 @@ sys.path.insert(0, str(PROJECT))
 from quicdeploy.common.io import load_json, sha256
 from quicdeploy.config.model import PHYSICAL_CONTRACT, PIPERX_EE_CONTRACT, compact_card, register
 from quicdeploy.config.quicforge import (CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET,
-                                       backbone_variant, code_paths, require, validate_inputs)
+                                       backbone_variant, code_paths, require, validate_aggregate_sources,
+                                       validate_inputs)
 
 
 def import_source(input_dir, checkpoint_name, conversion_meta, *, transfer_manifest=None):
@@ -127,18 +128,7 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
         # 下载的汇总文件按训练顺序保留各源；先校验内嵌身份，再转换为既有部署契约。
         if len(metadata) != 1:
             raise ValueError("Use one aggregated conversion file or separate per-dataset files")
-        entries = conversion["quicforge_sources"]
-        datasets = training["data"]["datasets"]
-        if not isinstance(entries, list) or not entries or len(entries) != len(datasets):
-            raise ValueError("Aggregated conversion metadata must cover every training dataset")
-        primary = conversion.get("quicforge_primary_source")
-        if type(primary) is not int or primary != 0:
-            raise ValueError("Aggregated conversion primary source must be index 0")
-        for entry, dataset in zip(entries, datasets, strict=True):
-            if entry.get("metadata_available") is not True or not isinstance(entry.get("metadata"), dict):
-                raise ValueError("Aggregated conversion source metadata is missing")
-            require(entry.get("label_file"), dataset["label_file"], "aggregated conversion dataset order")
-        metadata = [entry["metadata"] for entry in entries]
+        metadata = validate_aggregate_sources(conversion, training["data"]["datasets"])
     if len(metadata) > 1 or aggregated:
         # Preserve every dataset's original metadata inside one pinned bundle
         # member; top-level physical fields retain the existing runtime API.

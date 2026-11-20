@@ -8,7 +8,7 @@
     "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/provenance/conversion_meta.json": "b2d4218f063c81f5848b5c3667c42c127dec4782a9a66368e574da90b7c492e6",
     "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/provenance/training_config.json": "5386981bc6504635f4e81aae827ee69cd9affce0521ff3f913538a92350e2b84",
     "../../models/quicforge/pick_kun_once_iter10w_bs6_4gpu_update120000/weights.pt": "5e797461f5e6673a5e3f34de5a9e672eda946342a7104f1eb6a41c586467c832",
-    "../../quicdeploy/config/quicforge.py": "d610436c8ee542f9c869dd4efb01bf8722f56395e730497390c1689adb950c54",
+    "../../quicdeploy/config/quicforge.py": "3c9f87b2628d25cf775e58d3034a6fffaf5934ef8f6e742abe28b3caad1e78d5",
     "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "2cd62b197e56020ff5e789c9cd6b7c0ab8f21ae657a2137d9f3d5d4452849fb5",
     "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
     "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "6433084c766c2acb99cb153a4faf67caf533be1b172d9ff39832ba958ef548de",

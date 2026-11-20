@@ -280,10 +280,11 @@ def test_official_export_rejects_mismatch_and_unpinned_metadata(official_export,
 
 
 @pytest.fixture
-def aggregated_flat(flat_lva):
+def aggregated_flat(flat_lva, request):
     root = flat_lva
     training = json.loads((root / "config.resolved.json").read_text())
-    training["data"]["datasets"].append({"label_file": "/data/second_kvdb/label.pkl"})
+    names = getattr(request, "param", ("task_kvdb", "second_kvdb"))
+    training["data"]["datasets"] = [{"label_file": f"/data/{name}/label.pkl"} for name in names]
     checkpoint = json.loads((root / "checkpoint_manifest.json").read_text())
     checkpoint["config_hash"] = hashlib.sha256(json.dumps(training, sort_keys=True, ensure_ascii=False,
                                                            separators=(",", ":")).encode()).hexdigest()
@@ -299,6 +300,10 @@ def aggregated_flat(flat_lva):
     return root
 
 
+@pytest.mark.parametrize("aggregated_flat", [
+    pytest.param(("task_kvdb", "second_kvdb"), id="default-names"),
+    pytest.param(("task_kvdb_fix", "custom_second"), id="custom-output-names"),
+], indirect=True)
 def test_aggregated_conversion_preserves_sources_and_registers_cards(aggregated_flat, tmp_path, monkeypatch):
     import tools.prepare_quicforge as importer
     from quicdeploy.common.io import PROJECT_ROOT

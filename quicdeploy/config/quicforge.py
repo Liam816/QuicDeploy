@@ -48,6 +48,26 @@ def require(value, expected, label):
         raise ValueError(f"QuicForge {label}: expected {expected!r}, got {value!r}")
 
 
+def validate_aggregate_sources(conversion, datasets):
+    """Bind exported conversion metadata to each training label path in order.
+    按训练顺序把每份导出转换元数据与实际标签路径绑定。
+    """
+    entries = conversion["quicforge_sources"]
+    if not isinstance(entries, list) or not entries or len(entries) != len(datasets):
+        raise ValueError("Aggregated conversion metadata must cover every training dataset")
+    primary = conversion.get("quicforge_primary_source")
+    if type(primary) is not int or primary != 0:
+        raise ValueError("Aggregated conversion primary source must be index 0")
+    metadata = []
+    for entry, dataset in zip(entries, datasets, strict=True):
+        if (not isinstance(entry, dict) or entry.get("metadata_available") is not True
+                or not isinstance(entry.get("metadata"), dict)):
+            raise ValueError("Aggregated conversion source metadata is missing")
+        require(entry.get("label_file"), dataset["label_file"], "aggregated conversion dataset order")
+        metadata.append(entry["metadata"])
+    return metadata
+
+
 def checked_path(root, relative):
     """Manifest members must stay inside the bundle. / 清单路径必须位于部署包内部。"""
     path = Path(relative)
@@ -135,7 +155,12 @@ def validate_inputs(model_config, inference, stats, training, checkpoint, conver
     # physical semantics. Keep the original single-dataset representation valid.
     # 每个训练数据集分别绑定转换元数据并核对物理语义一致，兼容原单数据集文件格式。
     datasets = training["data"]["datasets"]
+    aggregated = "quicforge_sources" in conversion
     sources = conversion.get("dataset_sources", [conversion])
+    if aggregated:
+        bound_sources = validate_aggregate_sources(conversion, datasets)
+        sources = conversion.get("dataset_sources", bound_sources)
+        require(sources, bound_sources, "aggregated conversion source metadata")
     if not isinstance(sources, list) or not sources or len(sources) != len(datasets):
         raise ValueError("Conversion metadata must cover every training dataset in order")
     require(conversion.get("source_dataset"), sources[0].get("source_dataset"), "primary dataset identity")
@@ -145,7 +170,10 @@ def validate_inputs(model_config, inference, stats, training, checkpoint, conver
         if data_id in identities:
             raise ValueError("Duplicate training dataset identity: " + data_id)
         identities.add(data_id)
-        require(data_id, Path(metadata["source_dataset"]).name + "_kvdb", "dataset identity")
+        if not aggregated:
+            # Legacy metadata records the raw dataset and relies on the default output name.
+            # 旧元数据只记录原始数据集，按默认输出目录名匹配。
+            require(data_id, Path(metadata["source_dataset"]).name + "_kvdb", "dataset identity")
         for key in ("schema_version", "source_robot_type", "robot_profile", "fps", "kinematics", "pose_labels", "camera_map"):
             require(metadata.get(key), conversion.get(key), "dataset physical contract." + key)
     return physical
