@@ -18,6 +18,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 
 from quicdeploy.common.io import load_json, sha256
+from quicdeploy.config.quicforge import validate_object_id
 from quicdeploy.config.resolve import resolve
 from tools import prepare_quicforge as importer
 
@@ -104,7 +105,7 @@ exec bash "$ROOT/scripts/start_live.sh" "$@"
 ''' % name
 
 
-def run_import(input_dir, *, precision="fp16", dry_run=False, hardlink_weights=False):
+def run_import(input_dir, *, precision="fp16", dry_run=False, hardlink_weights=False, object_id=None):
     if precision not in ("fp16", "fp32"):
         raise ValueError("Precision must be fp16 or fp32")
     supplied = Path(os.path.abspath(Path(input_dir).expanduser()))
@@ -133,6 +134,12 @@ def run_import(input_dir, *, precision="fp16", dry_run=False, hardlink_weights=F
                 "paths": {key: str(path) for key, path in paths.items()},
                 "check_command": f"bash scripts/start_{name}.sh --check",
                 "run_command": f"QUICDEPLOY_WEBVIZ=1 bash scripts/start_{name}.sh --run"}
+        object_ids = inspection.get("object_ids", [])
+        if object_ids:
+            selected_id = object_ids[0] if object_id is None else object_id
+            plan["object_id"] = validate_object_id(selected_id, object_ids)
+        elif object_id is not None:
+            raise ValueError("--object-id requires a QuicForge Object AdaLN model")
         if dry_run:
             return {**plan, "status": "dry_run", "hardware_connected": False}
         with project_lock():
@@ -161,6 +168,8 @@ def run_import(input_dir, *, precision="fp16", dry_run=False, hardlink_weights=F
                     profile["hardware"] = inspection["hardware"]
                 if inspection["temporal_sampling"]:
                     profile["execution"] = {"prefetch_remaining_steps": 23}
+                if "object_id" in plan:
+                    profile["runtime"] = {"object_id": plan["object_id"]}
                 paths["config"].write_text("# Generated model profile / 自动生成的模型配置\n" +
                                            yaml.safe_dump(profile, sort_keys=False), encoding="utf-8")
                 paths["launcher"].write_text(launcher(name), encoding="utf-8")
@@ -187,13 +196,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkpoint_dir", type=Path)
     parser.add_argument("--precision", choices=("fp16", "fp32"), default="fp16")
+    parser.add_argument("--object-id", type=int,
+                        help="Object AdaLN ID to write to YAML / 写入 YAML 的物体 ID，默认使用表中首个 ID")
     parser.add_argument("--dry-run", action="store_true", help="validate and preview only / 只校验和预览")
     parser.add_argument("--hardlink-weights", action="store_true",
                         help="share the source weight inode on the same filesystem / 同盘硬链接复用权重，源文件须保持只读")
     args = parser.parse_args()
     try:
         result = run_import(args.checkpoint_dir, precision=args.precision, dry_run=args.dry_run,
-                            hardlink_weights=args.hardlink_weights)
+                            hardlink_weights=args.hardlink_weights, object_id=args.object_id)
     except (OSError, ValueError, KeyError, RuntimeError) as exc:
         parser.exit(1, f"Import failed / 导入失败: {exc}\n")
     print(json.dumps(result, indent=2, ensure_ascii=False))

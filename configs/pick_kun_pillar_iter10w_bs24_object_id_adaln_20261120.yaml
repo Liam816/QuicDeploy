@@ -1,0 +1,6 @@
+# Generated model profile / 自动生成的模型配置
+schema_version: 2
+extends: defaults.yaml
+model: models/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120.json
+runtime:
+  object_id: 0

@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from ..common.io import load_json, sha256
+from ..common.validation import is_int
 from .model import (CAMERA_ORDER, PHYSICAL_CONTRACT, PIPERX_EE_CONTRACT,
                     PIPERX_EE_JOINT_NAMES, PIPERX_EE_URDF_SHA256)
 
@@ -25,6 +26,27 @@ def backbone_variant(model):
     value = model.get("backbone", "dinov3_vitl16")
     if value not in BACKBONES:
         raise ValueError(f"Unsupported QuicForge backbone: {value!r}")
+    return value
+
+
+def object_adaln_ids(model):
+    """Ordered external IDs from an AdaLN export. / 读取 AdaLN 导出中的有序外部 ID。"""
+    ids = model.get("object_ids")
+    if ids is None:
+        ids = []
+    if not isinstance(ids, list) or any(not is_int(value) or not 0 <= value < 2**31 for value in ids):
+        raise ValueError("QuicForge object_ids must be a list of non-negative INT32 integers")
+    if len(ids) != len(set(ids)):
+        raise ValueError("QuicForge object_ids must be unique")
+    mode = model.get("object_conditioning", "kv")
+    if mode not in ("kv", "adaln") or (ids and mode != "adaln"):
+        raise ValueError(f"Unsupported QuicForge object_conditioning: {mode!r}")
+    return ids
+
+
+def validate_object_id(value, ids):
+    if not is_int(value) or value not in ids:
+        raise ValueError(f"runtime.object_id must be an integer in checkpoint object_ids {ids}, got {value!r}")
     return value
 
 
@@ -84,12 +106,15 @@ def validate_inputs(model_config, inference, stats, training, checkpoint, conver
     明确拒绝多帧、多任务、state-GT 等尚未支持的模型，不从权重形状猜训练语义。
     """
     require(model_config.get("type"), "LVADecoder", "model type")
-    unknown = set(model_config) - {"type", *DIMS, "gradient_checkpointing", "preproc_file", "task_ids", "dino_weights", "backbone"}
+    unknown = set(model_config) - {"type", *DIMS, "gradient_checkpointing", "preproc_file", "task_ids",
+                                   "dino_weights", "backbone", "object_conditioning", "object_ids"}
     if unknown:
         raise ValueError(f"Unsupported QuicForge model arguments: {sorted(unknown)}")
     variant = backbone_variant(model_config)
+    ids = object_adaln_ids(model_config)
     for label, owner in (("training", training), ("checkpoint", checkpoint)):
         require(backbone_variant(owner["model"]), variant, label + ".model.backbone")
+        require(object_adaln_ids(owner["model"]), ids, label + ".model.object_ids")
     for k, v in DIMS.items():
         require(model_config.get(k), v, k)
         require(training["model"].get(k), v, f"training.model.{k}")
@@ -105,7 +130,13 @@ def validate_inputs(model_config, inference, stats, training, checkpoint, conver
     require(training["data"].get("max_delay"), 10, "training RTC support")
     require(training["task"].get("unconditional_prob"), 1.0, "unconditional training")
     require(checkpoint.get("format_version"), 1, "checkpoint format")
-    require(checkpoint.get("export", {}).get("weights"), "model", "weight variant")
+    export = checkpoint.get("export")
+    if "export" in checkpoint and export is None:
+        # DDP still writes backend/model.pt when optional export is disabled.
+        # DDP 关闭额外导出时仍会保存原生 backend/model.pt。
+        require(checkpoint.get("backend"), "ddp", "native checkpoint backend")
+    else:
+        require(export.get("weights") if isinstance(export, dict) else None, "model", "weight variant")
     require(inference.get("predictor"), {"type": "LVAFlowPredictor", "num_steps": 10, "guidance_scale": 0.0},
             "inference predictor")
     require(inference.get("precision"), "fp32", "reference inference precision")

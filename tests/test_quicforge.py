@@ -159,6 +159,46 @@ def test_raw_loader_rejects_bad_state_and_uses_strict_loading(bundle, monkeypatc
         QuicForgeLVAAdapter().load(config)
 
 
+def test_object_adaln_loader_checks_ordered_int32_buffer(bundle, monkeypatch):
+    import torch
+    from quicdeploy.policy.quicforge import QuicForgeLVAAdapter
+    import quicdeploy.policy.backends.quicforge_lva as backend
+
+    config, root, files = bundle
+    config.update(object_id=0, runtime_versions={"torch": torch.__version__, "numpy": np.__version__})
+    for name in ("model_config.json", "provenance/training_config.json", "provenance/checkpoint.json"):
+        file = files[name]
+        model = file if name == "model_config.json" else file["model"]
+        model.update(object_ids=[11, 0], object_conditioning="adaln")
+        write(root / name, file)
+
+    class Tiny(torch.nn.Module):
+        def __init__(self, object_ids, **kwargs):
+            super().__init__()
+            self.register_buffer("_object_ids", torch.tensor(object_ids, dtype=torch.int32))
+            self.weight = torch.nn.Parameter(torch.zeros(2, 2))
+
+    monkeypatch.setattr(backend, "LVADecoder", Tiny)
+
+    def load(table):
+        torch.save({"weight": torch.ones(2, 2), "_object_ids": table}, root / "weights.pt")
+        config["weights_sha256"] = sha256(root / "weights.pt")
+        manifest = json.loads((root / "deployment_manifest.json").read_text())
+        manifest["files"] = {name: sha256(root / name) for name in FILES}
+        manifest["source"]["input_weights_sha256"] = config["weights_sha256"]
+        write(root / "deployment_manifest.json", manifest)
+        adapter = QuicForgeLVAAdapter()
+        adapter.load(config)
+        return adapter
+
+    adapter = load(torch.tensor([11, 0], dtype=torch.int32))
+    assert adapter.model._object_ids.tolist() == [11, 0]
+    assert adapter._model_inference_kwargs == {"object_id": 0}
+    for bad_table in (torch.tensor([0, 11], dtype=torch.int32), torch.tensor([11, 0], dtype=torch.int64)):
+        with pytest.raises(ValueError, match="state_dict _object_ids"):
+            load(bad_table)
+
+
 def test_card_must_pin_network_code(bundle, tmp_path):
     config, _, _ = bundle
     config["implementation_files"] = [p for p in config["implementation_files"] if not p.endswith("/decoder.py")]

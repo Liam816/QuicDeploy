@@ -1,0 +1,105 @@
+{
+  "artifacts": {
+    "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/deployment_manifest.json": "d2475c1265bcb9524cc70be11f6a74142326ea84a7e2c325157495684972a645",
+    "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/inference_config.json": "a81e9713bae7e36e0b6af91cd1c916441662633b12faf0501bbfc83b722b5dbc",
+    "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/model_config.json": "083871530a97d36803d58e9db0f0e44e9a885162c194df1deea92dd237b97c09",
+    "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/normalization.json": "39d5e88f2e0e23fc9ed7e89112e1e18e8191ce6d86180a35f87f1ea06afb4ae9",
+    "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/provenance/checkpoint.json": "9faa7c92957258da9a9c088197632123689375cc9441788d850002d9c3fc5d16",
+    "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/provenance/conversion_meta.json": "e3f5bfe91b233096a23bdc8e89bf1ecf5063081c3e870d6ce9da05d6dff4db18",
+    "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/provenance/training_config.json": "e878adc7723aaae144d6f8b89d4968d3b363248db79145bfb744d8bb5df132d3",
+    "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/weights.pt": "43dbd94e44ed55d72a92edacec4c327510297a0630d08331d975ea56774f8de9",
+    "../../quicdeploy/config/quicforge.py": "9ed8c73a5fb4115631b720d9190ddb825f89ac778ccb0a3a20d577eb141f4aea",
+    "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "27dc78a308757b672bf312ab46083aba4d1bc7b7c33932ab7521d1d2447e809f",
+    "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
+    "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "2bb064db17b76362a80839e18aa1fa47b7c6167231bc063cb21b227caac4e13e",
+    "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
+    "../../quicdeploy/policy/backends/quicforge_lva/model.py": "a1e22e768a9983851c8f64ffb4cb1e92ec9e4022c562140a3c33b62afb0475f7",
+    "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
+    "../../quicdeploy/policy/lva.py": "ab75a5db8dd5ef6570a2e028811a0813555f5404104e566a7ca5c013ec295b56",
+    "../../quicdeploy/policy/quicforge.py": "a17c575d5423c3ef207483f28e2a7013f0df73eb7fa6cc1e754a891b7e6636cb"
+  },
+  "metadata": {
+    "architecture": "DINOv3 ViT-L/16 + FM",
+    "checkpoint": {
+      "epoch": 210,
+      "global_step": 100000
+    },
+    "dataset_split": "training_replay",
+    "demo": false,
+    "name": "pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120 · Epoch 210 · Step 100000 · FP16"
+  },
+  "model": {
+    "action_dt_s": 0.03333333333333333,
+    "adapter": "quicdeploy.policy.quicforge:QuicForgeLVAFP16Adapter",
+    "artifact_dir": "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120",
+    "artifact_format": "quicforge_lva_v1",
+    "cameras": [
+      "left_wrist",
+      "head",
+      "right_wrist"
+    ],
+    "ends": {
+      "left": "left_Link6",
+      "right": "right_Link6"
+    },
+    "export_metadata": "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/deployment_manifest.json",
+    "fixed_prefix_steps": 10,
+    "frame": "world",
+    "gripper_unit": "mm",
+    "horizon": 50,
+    "id": "pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120",
+    "implementation_files": [
+      "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/inference_config.json",
+      "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/model_config.json",
+      "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/provenance/checkpoint.json",
+      "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/provenance/conversion_meta.json",
+      "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/provenance/training_config.json",
+      "../../quicdeploy/policy/backends/quicforge_lva/__init__.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/model.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/decoder.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py",
+      "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json",
+      "../../quicdeploy/policy/quicforge.py",
+      "../../quicdeploy/policy/lva.py",
+      "../../quicdeploy/config/quicforge.py"
+    ],
+    "normalization": "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/normalization.json",
+    "output_domain": "physical",
+    "position_unit": "m",
+    "preprocessing": {
+      "crop": [
+        16,
+        16,
+        448,
+        608
+      ],
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "protocol": "eef20_relative",
+    "rotation": "columns6d",
+    "runtime_versions": {
+      "numpy": "2.2.6",
+      "torch": "2.11.0+cu128"
+    },
+    "supervision": "action",
+    "target_contract": {
+      "anchor_pose_source": "state",
+      "first_target_offset_steps": 1,
+      "pose_source": "action"
+    },
+    "timing_domain": "stored_recording_time",
+    "weights": "../../models/quicforge/pick_kun_pillar_iter10w_bs24_object_id_adaln_20261120/weights.pt",
+    "weights_sha256": "43dbd94e44ed55d72a92edacec4c327510297a0630d08331d975ea56774f8de9"
+  },
+  "schema_version": 2
+}

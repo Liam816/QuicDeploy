@@ -1,10 +1,8 @@
 """``LVADecoder``: the model class configs name (``model = dict(type="LVADecoder", ...)``).
 
-It is the ported ``Decoder`` (decoder.py, unchanged) plus the config-level options: backbone gradient
-checkpointing and the action normalization (``preproc_file``). It adds no parameters, so state_dict keys are
-identical and the original checkpoints load with ``strict=True``. The constructor reads no file: pretrained
-weights, the whole model's or only the DINOv3 backbone's (``DINOv3Loader``), are loaded after construction from
-``model.weights``, like every model's.
+It is the ported ``Decoder`` plus config-level options for the visual backbone and action normalization.
+Object AdaLN allocates conditioning weights only for exports with an object ID table. Both legacy and
+conditioned checkpoints load with ``strict=True``. The constructor reads no weight files.
 
 ``preproc_file`` is the ``preproc.pt`` (action mu / std) the weights are trained with: the model predicts
 normalized actions, so the same weights mean nothing with another normalization. It lives in the model section
@@ -31,7 +29,8 @@ class LVADecoder(Decoder):
     def __init__(self, emb_dim: int = 256, time_dim: int = 32, out_dim: int = 20, n_att_layer: int = 8,
                  n_context: int = 50, task_ids: list[int] | None = None, dino_weights: str | None = None,
                  gradient_checkpointing: bool = False, preproc_file: str | None = None,
-                 backbone: str = "dinov3_vitl16"):
+                 backbone: str = "dinov3_vitl16", object_ids: list[int] | None = None,
+                 object_conditioning: str = "kv"):
         if dino_weights is not None:
             # None is still accepted: the model_config.json of artifacts exported before the change records it
             raise ValueError("model.dino_weights 已移除：DINO 骨干的预训练权重写在 model.weights，"
@@ -49,7 +48,8 @@ class LVADecoder(Decoder):
             visual_backbone = build_dinov3_vitb16()
         super().__init__(emb_dim=emb_dim, time_dim=time_dim, out_dim=out_dim, n_att_layer=n_att_layer,
                          n_context=n_context, task_ids=task_ids or [], dino_weights=None,
-                         visual_backbone=visual_backbone)
+                         visual_backbone=visual_backbone, object_ids=object_ids,
+                         object_conditioning=object_conditioning)
         self.backbone_variant = backbone
         self._backbone.gradient_checkpointing = gradient_checkpointing
         self.preproc_file = preproc_file        # used by the data side and the assets, not by forward

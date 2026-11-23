@@ -145,6 +145,31 @@ def test_aggregate_and_precision_selection_keep_one_unsuffixed_card(project, agg
     assert len(json.loads((paths["bundle"] / "provenance/conversion_meta.json").read_text())["dataset_sources"]) == 2
 
 
+@pytest.mark.parametrize(("selected", "expected"), [(None, 5), (0, 0)])
+def test_object_adaln_import_writes_explicit_runtime_id(project, flat_lva, selected, expected):
+    source = flat_lva
+    training_path = source / "config.resolved.json"
+    checkpoint_path = source / "checkpoint_manifest.json"
+    exported_path = source / "model_config.json"
+    training, checkpoint, exported = [json.loads(p.read_text()) for p in
+                                      (training_path, checkpoint_path, exported_path)]
+    for model in (training["model"], checkpoint["model"], exported):
+        model.update(object_conditioning="adaln", object_ids=[5, 0])
+    checkpoint.update(backend="ddp", export=None)
+    checkpoint["config_hash"] = hashlib.sha256(json.dumps(training, sort_keys=True, ensure_ascii=False,
+                                                           separators=(",", ":")).encode()).hexdigest()
+    for path, value in zip((training_path, checkpoint_path, exported_path), (training, checkpoint, exported)):
+        path.write_text(json.dumps(value))
+    complete(source)
+    with pytest.raises(ValueError, match=r"runtime\.object_id"):
+        workflow.run_import(source, object_id=1)
+    assert not (project / "outputs").exists()
+    result = workflow.run_import(source, object_id=selected)
+    assert result["object_ids"] == [5, 0] and result["object_id"] == expected
+    profile = yaml.safe_load(workflow.targets(result["name"])["config"].read_text())
+    assert profile["runtime"] == {"object_id": expected}
+
+
 def test_temporal_preserves_training_stride_and_uses_temporal_prefetch(project, flat):
     source = complete(flat, name="Temporal-Pick")
     result = workflow.run_import(source, precision="fp32")

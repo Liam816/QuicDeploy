@@ -8,15 +8,15 @@
     "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/provenance/conversion_meta.json": "8ceb00ab486a5a6d760d7979462bf14c8d5ef974ad687647d7dea2fda148fdc9",
     "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/provenance/training_config.json": "2bcba401be09987ba61c4332c6db40eb15bdc6a34e982f731afa5b4767361e72",
     "../../models/quicforge/lva_pick2box_quicforge_ep050_step37250/weights.pt": "7f8f5418d89cfa4c30d51e0d224ec532925ae9bfef3c104b2cb4230ac7200f5c",
-    "../../quicdeploy/config/quicforge.py": "3c9f87b2628d25cf775e58d3034a6fffaf5934ef8f6e742abe28b3caad1e78d5",
-    "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "2cd62b197e56020ff5e789c9cd6b7c0ab8f21ae657a2137d9f3d5d4452849fb5",
+    "../../quicdeploy/config/quicforge.py": "9ed8c73a5fb4115631b720d9190ddb825f89ac778ccb0a3a20d577eb141f4aea",
+    "../../quicdeploy/policy/backends/quicforge_lva/PROVENANCE.json": "27dc78a308757b672bf312ab46083aba4d1bc7b7c33932ab7521d1d2447e809f",
     "../../quicdeploy/policy/backends/quicforge_lva/__init__.py": "a6f122bd68675bd47b698c6e5c23728208b8ff807f7b5eed863bc7ca6a2b4749",
-    "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "6433084c766c2acb99cb153a4faf67caf533be1b172d9ff39832ba958ef548de",
+    "../../quicdeploy/policy/backends/quicforge_lva/decoder.py": "2bb064db17b76362a80839e18aa1fa47b7c6167231bc063cb21b227caac4e13e",
     "../../quicdeploy/policy/backends/quicforge_lva/dinov3.py": "acb49676aee0a5aeddf48c2dd3198cf679ff3b174b5ce98fa54156d5e546f4ee",
-    "../../quicdeploy/policy/backends/quicforge_lva/model.py": "e3a3d3aca38b7290b5195ce2deb02df2875ff5cc2f838a092717adca3aa02ce5",
+    "../../quicdeploy/policy/backends/quicforge_lva/model.py": "a1e22e768a9983851c8f64ffb4cb1e92ec9e4022c562140a3c33b62afb0475f7",
     "../../quicdeploy/policy/backends/quicforge_lva/task_ids.py": "e8c1fffbcd881470e7124dc3a31cd4b1ec8a0c994cae7c8a292a0e59551cd9fa",
-    "../../quicdeploy/policy/lva.py": "d9a4793385124fc87d3bbf964217cb79d061faf240a64790200442681c4e0e13",
-    "../../quicdeploy/policy/quicforge.py": "96ad813a031208743af01f0b43e4d4e0f3d6e8ce24e51c1675fa26f9dfda88ad"
+    "../../quicdeploy/policy/lva.py": "ab75a5db8dd5ef6570a2e028811a0813555f5404104e566a7ca5c013ec295b56",
+    "../../quicdeploy/policy/quicforge.py": "a17c575d5423c3ef207483f28e2a7013f0df73eb7fa6cc1e754a891b7e6636cb"
   },
   "metadata": {
     "architecture": "DINOv3 + FM",

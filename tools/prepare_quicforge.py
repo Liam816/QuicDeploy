@@ -18,7 +18,7 @@ from quicdeploy.common.io import load_json, sha256
 from quicdeploy.config.model import PHYSICAL_CONTRACT, PIPERX_EE_CONTRACT, compact_card, register
 from quicdeploy.config.quicforge import (CAMERA_MAP, FILES, FORMAT, PREPROCESSING, TARGET,
                                        backbone_variant, code_paths, require, validate_aggregate_sources,
-                                       validate_inputs)
+                                       object_adaln_ids, validate_inputs)
 
 
 def import_source(input_dir, checkpoint_name, conversion_meta, *, transfer_manifest=None):
@@ -169,6 +169,8 @@ def prepare(input_dir, checkpoint_name, conversion_meta, output, card_stem, *, t
                       "global_step": manifest["global_step"], "temporal_sampling": sampling}
         if physical == PIPERX_EE_CONTRACT:
             inspection["hardware"] = "hardware/piper_x/ee/hardware.yaml"
+        if not temporal and (ids := object_adaln_ids(model_config)):
+            inspection["object_ids"] = ids
         return inspection
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".quicforge-import-", dir=output.parent) as tmp:

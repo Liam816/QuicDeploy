@@ -26,6 +26,8 @@ checkpoint_dir/
   conversion_meta.json
 ```
 
+原生 DDP 断点即使没有启用额外 export，也可上传 `backend/model.pt` 作为上述 `model.pt`。
+
 支持现有适配器已验证的单帧 `LVADecoder`、`TemporalLVADecoder` 和 `CachedTemporalLVADecoder`，
 包括单数据集、`dataset_sources` 多来源和 `quicforge_sources` 汇总转换元数据。
 有 `quicforge_sources` 时，导入和加载按训练顺序核对每项的完整 `label_file` 路径及绑定的转换元数据，
@@ -45,6 +47,17 @@ checkpoint_dir/
 两种 backbone 的 FP16 均保持所需 LayerScale 为 FP32；ViT-B 同时保留原始 FP32 RoPE periods。
 ViT-B 模型卡额外固定官方 `third_party/dinov3` 和共享构造/精度代码的哈希。
 当前实例与复验命令见 [ViT-B/16 部署](vitb16_deployment.md)。
+
+单帧 Object AdaLN 模型使用 checkpoint `model_config.json` 中有序的 `object_ids`。
+导入时默认取表中第一个 ID，也可用 `--object-id 1` 指定，并把选值写入生成的运行 YAML。
+
+```yaml
+runtime:
+  object_id: 0
+```
+
+运行时可直接编辑此字段切换类别。值须为 checkpoint 表中的整数，普通推理和 RTC 使用同一个值。
+例如表为 `[0, 1]` 时，`0` 是有效类别。缺失、越界和非整数值会在配置解析阶段报错。
 
 单帧模型还支持 QuicDataPipe 为 `bi_piper_native` 录制生成的 PiperX EE 标签。
 导入时同时核对训练 URDF 的 SHA-256、`piperx_dual_root`、左右 `*_ee_link`、关节顺序及每份数据的转换记录。

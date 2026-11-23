@@ -62,6 +62,7 @@ class LVAAdapter(PolicyAdapter):
         import torch
 
         self.config, self.torch = config, torch
+        self._model_inference_kwargs = {}
         # Exact runtime pin: numerics were validated with these versions.
         # 严格锁定运行时版本：数值精度是在该版本组合下验证的。
         if config["runtime_versions"] != {"torch": torch.__version__, "numpy": np.__version__}:
@@ -165,7 +166,7 @@ class LVAAdapter(PolicyAdapter):
         with torch.inference_mode(), precision:
             prediction = self.model.inference(
                 image, action_prefix=prefix, delay=0 if prefix is None else size,
-                num_steps=10, noise=noise, guidance_scale=0.0,
+                num_steps=10, noise=noise, guidance_scale=0.0, **self._model_inference_kwargs,
             )
         if prefix is not None:
             # The source casts the clean prefix to the parameter dtype each step;

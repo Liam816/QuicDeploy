@@ -120,6 +120,22 @@ class AdaLNBlock(nn.Module):
         # Residual connection
         return x + h
 
+class ObjectAdaLN(nn.Module):
+    """Residual object modulation after time AdaLN. / 在时间 AdaLN 后叠加物体条件残差。"""
+
+    def __init__(self, emb_dim):
+        super().__init__()
+        self.norm = nn.LayerNorm(emb_dim, elementwise_affine=False)
+        self.modulation = nn.Linear(emb_dim, 2 * emb_dim)
+        nn.init.zeros_(self.modulation.weight)
+        nn.init.zeros_(self.modulation.bias)
+
+    def forward(self, query, embedding):
+        scale, shift = self.modulation(embedding)[:, None, :].chunk(2, dim=-1)
+        residual = scale * self.norm(query) + shift
+        return query + residual
+
+
 class Decoder( nn.Module ):
     def __init__(
             self,
@@ -132,6 +148,8 @@ class Decoder( nn.Module ):
             task_ids=None,
             dino_weights=None,
             visual_backbone=None,
+            object_ids=None,
+            object_conditioning="kv",
     ):
         super().__init__()
         if int(num_advantage_conditions) not in (2, NUM_ADVANTAGE_CONDITIONS):
@@ -173,6 +191,19 @@ class Decoder( nn.Module ):
         self._context_pe = nn.Parameter( torch.randn( 3192, emb_dim ) )
         self._n_context = n_context
         self._out_dim = out_dim
+        self._object_embedding = None
+        if object_ids:
+            if object_conditioning != "adaln":
+                raise ValueError("QuicForge Decoder requires adaln for object conditioning")
+            # Row zero is null. External ID zero can be a learned category.
+            # 第 0 行为空条件。外部 ID 0 可以是训练过的类别。
+            self._object_rows = {value: row for row, value in enumerate(object_ids, start=1)}
+            self.register_buffer("_object_ids", torch.tensor(object_ids, dtype=torch.int32))
+            self._object_embedding = nn.Embedding(len(object_ids) + 1, emb_dim, padding_idx=0)
+            nn.init.normal_(self._object_embedding.weight, std=0.02)
+            with torch.no_grad():
+                self._object_embedding.weight[0].zero_()
+            self._object_ada_ln = nn.ModuleList(ObjectAdaLN(emb_dim) for _ in range(n_att_layer))
 
 
     def backbone_forward( self, img ):
@@ -262,8 +293,8 @@ class Decoder( nn.Module ):
 
     def predict_velocity(
             self, context, noisy_action, flow_time, advantage_condition=None,
-            task_id=None):
-        """Predict flow velocity with time and ReCap advantage conditioning.
+            task_id=None, object_id=None):
+        """Predict flow velocity with time and optional conditioning.
 
         Args:
             context: Encoded observation tokens shaped (B, N, D).
@@ -272,6 +303,7 @@ class Decoder( nn.Module ):
                 element shaped (B,) / (B, 1).
             advantage_condition: Scalar or (B,) IDs. Zero is unconditional,
                 one is positive advantage, and two is negative advantage.
+            object_id: Integer external ID from the checkpoint for Object AdaLN.
         """
         if noisy_action.ndim != 3:
             raise ValueError(f"noisy_action must be (B, H, A), got {noisy_action.shape}")
@@ -307,9 +339,20 @@ class Decoder( nn.Module ):
         elif task_id is not None:
             raise ValueError('this model has no task conditioning')
 
-        for ada_ln, sa, ca, sm in zip(
-                self._ada_ln, self._self_att, self._cross_att, self._smoother ):
+        object_embedding = None
+        if getattr(self, "_object_embedding", None) is not None:
+            if type(object_id) is not int or object_id not in self._object_rows:
+                raise ValueError("object_id must be an integer from the checkpoint object table")
+            row = self._object_rows[object_id]
+            object_embedding = self._object_embedding.weight[row:row + 1]
+        elif object_id is not None:
+            raise ValueError("this model has no object conditioning")
+
+        for layer, (ada_ln, sa, ca, sm) in enumerate(zip(
+                self._ada_ln, self._self_att, self._cross_att, self._smoother)):
             query = ada_ln( query, time_emb )
+            if object_embedding is not None:
+                query = self._object_ada_ln[layer](query, object_embedding)
             query = sa( query, query )
             query = ca(
                 query,
@@ -321,10 +364,11 @@ class Decoder( nn.Module ):
         return self._out_proj(query)
 
     def forward(
-            self, img, noisy_action, flow_time, advantage_condition=None, task_id=None):
+            self, img, noisy_action, flow_time, advantage_condition=None, task_id=None, object_id=None):
         context = self.encode_image( img )
+        kwargs = {} if object_id is None else {"object_id": object_id}
         return self.predict_velocity(
-            context, noisy_action, flow_time, advantage_condition, task_id=task_id
+            context, noisy_action, flow_time, advantage_condition, task_id=task_id, **kwargs
         )
 
     def _task_indices(self, task_id, batch_size, device):
@@ -358,6 +402,7 @@ class Decoder( nn.Module ):
             noise=None,
             guidance_scale=1.0,
             task_id=None,
+            object_id=None,
     ):
         """Generate an action chunk with positive-advantage classifier-free guidance.
 
@@ -433,7 +478,9 @@ class Decoder( nn.Module ):
         )
         prefix_mask_3d = prefix_mask[:, :, None]
         context = self.encode_image( img )
-        task_kwargs = {} if task_id is None else {'task_id': task_id}
+        condition_kwargs = {} if task_id is None else {"task_id": task_id}
+        if object_id is not None:
+            condition_kwargs["object_id"] = object_id
         dt = 1.0 / num_steps
 
         for step in range(num_steps):
@@ -446,18 +493,18 @@ class Decoder( nn.Module ):
             token_time = torch.where(prefix_mask, torch.ones_like(token_time), token_time)
             if guidance_scale == 0.0:
                 velocity = self.predict_velocity(
-                    context, x_t, token_time, UNCONDITIONAL_ADVANTAGE, **task_kwargs
+                    context, x_t, token_time, UNCONDITIONAL_ADVANTAGE, **condition_kwargs
                 )
             elif guidance_scale == 1.0:
                 velocity = self.predict_velocity(
-                    context, x_t, token_time, POSITIVE_ADVANTAGE, **task_kwargs
+                    context, x_t, token_time, POSITIVE_ADVANTAGE, **condition_kwargs
                 )
             else:
                 velocity_unconditional = self.predict_velocity(
-                    context, x_t, token_time, UNCONDITIONAL_ADVANTAGE, **task_kwargs
+                    context, x_t, token_time, UNCONDITIONAL_ADVANTAGE, **condition_kwargs
                 )
                 velocity_positive = self.predict_velocity(
-                    context, x_t, token_time, POSITIVE_ADVANTAGE, **task_kwargs
+                    context, x_t, token_time, POSITIVE_ADVANTAGE, **condition_kwargs
                 )
                 velocity = (
                     (1.0 - guidance_scale) * velocity_unconditional

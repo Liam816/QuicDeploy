@@ -21,11 +21,12 @@ from ..common.layout import IK_JOINT_NAMES, SIDES
 from ..common.validation import is_int, is_number, validate_gripper_binary_thresholds, validate_gripper_speed
 from .model import PHYSICAL_CONTRACT, PIPERX_EE_CONTRACT, PIPERX_EE_JOINT_NAMES, PIPERX_EE_URDF_SHA256, load_model_card
 from .defaults import OPTIONAL_DEFAULTS
+from . import quicforge
 
 MODES = ("sync", "async", "rtc")
 PIPER_CONTROL_URDF_SHA256 = "b403c8b8fed2e191eef8dd4d30b7f0858da0f1e10187a2dc1ef6c77ca26c3f13"
 SECTION_KEYS = {
-    "runtime": {"device", "cpu_threads"},
+    "runtime": {"device", "cpu_threads", "object_id"},
     "observation": {"max_camera_age_ms", "max_camera_skew_ms", "max_joint_age_ms"},
     "execution": {"mode", "prefix_steps", "control_hz", "policy_hz", "policy_overclock_enabled",
                   "n_action_steps", "prefetch_remaining_steps", "handoff_margin_s",
@@ -36,7 +37,7 @@ SECTION_KEYS = {
     "hold": {"max_hold_drift_deg", "max_hold_image_change"},
     "motion_limits": {"max_chunk_displacement_m", "max_chunk_rotation_deg"},
 }
-OPTIONAL_KEYS = {"guard": {"gripper_binary_thresholds_mm"}}
+OPTIONAL_KEYS = {"guard": {"gripper_binary_thresholds_mm"}, "runtime": {"object_id"}}
 HARDWARE_KEYS = {"schema_version", "physical_contract", "robot_config", "kinematics", "can_adapter_serials", "artifacts"}
 
 
@@ -261,22 +262,29 @@ def resolve(config_path, *, model_card=None):
     for key in ("frame", "ends"):
         if model.get(key, PHYSICAL_CONTRACT[key]) != hardware["kinematics"].get(key, PHYSICAL_CONTRACT[key]):
             raise ValueError(f"Model and hardware coordinate contracts differ: {key}")
-    if model.get("artifact_format") in ("quicforge_lva_v1", "quicforge_temporal_lva_v1"):
-        if model["artifact_format"] == "quicforge_temporal_lva_v1":
-            from .temporal import load_bundle
+    object_ids = []
+    if model.get("artifact_format") in (quicforge.FORMAT, "quicforge_temporal_lva_v1"):
+        if model["artifact_format"] == quicforge.FORMAT:
+            bundle = quicforge.load_bundle(model, verify_hashes=False)
+            object_ids = quicforge.object_adaln_ids(bundle["model_config"])
         else:
-            from .quicforge import load_bundle
+            from .temporal import load_bundle
 
-        conversion = load_bundle(model, verify_hashes=False)["conversion"]
-        if conversion["kinematics"].get("urdf_sha256") != sha256(hardware["kinematics"]["urdf"]):
+            bundle = load_bundle(model, verify_hashes=False)
+        if bundle["conversion"]["kinematics"].get("urdf_sha256") != sha256(hardware["kinematics"]["urdf"]):
             raise ValueError("QuicForge training URDF differs from deployment kinematics")
+    if object_ids:
+        model["object_id"] = quicforge.validate_object_id(settings["runtime"].get("object_id"), object_ids)
+    elif "object_id" in settings["runtime"]:
+        raise ValueError("runtime.object_id requires a QuicForge Object AdaLN model")
     robot = hardware["robot"]
     # Derive absent values only: explicit disagreements must still fail validation.
     # 只补缺省值；显式填写但不一致的配置仍然必须报错。
     settings["execution"].setdefault("policy_hz", 1 / model["action_dt_s"])
     settings["guard"].setdefault("gripper_widths_mm", [robot["left_gripper_width_mm"], robot["right_gripper_width_mm"]])
     for section, keys in SECTION_KEYS.items():
-        _keys(settings[section], keys, label=section)
+        optional = OPTIONAL_KEYS.get(section, set())
+        _keys(settings[section], keys - optional, optional, label=section)
     validate_runtime(settings, model, rtc_capable=model.get("fixed_prefix_steps", 0) > 0)
     if [robot["left_gripper_width_mm"], robot["right_gripper_width_mm"]] != settings["guard"]["gripper_widths_mm"]:
         raise ValueError("Robot and command guard gripper widths disagree")
