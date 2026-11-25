@@ -9,7 +9,7 @@ from quicdeploy.common.geometry import decode, interpolate_pose, relative_prefix
 from quicdeploy.planning.scheduler import PrefixWindowExpired, QueueScheduler
 from quicdeploy.planning.trajectory import TimedTrajectory
 from quicdeploy.robot.guard import CommandGuard
-from quicdeploy.runtime.controls import TerminalControls
+from quicdeploy.runtime.controls import PauseRequested, TerminalControls
 
 MODEL = {"first_target_offset_s": 1 / 30, "action_dt_s": 1 / 30, "horizon": 50, "protocol": "eef20_relative"}
 EXECUTION = {"mode": "async", "prefix_steps": 10, "policy_hz": 30, "n_action_steps": 40,
@@ -112,3 +112,19 @@ def test_arrow_key_decoding():
     assert controls.poll() == ["resume"]
     os.close(read)
     os.close(write)
+
+
+def test_space_preempts_buffered_arrow_keys():
+    read, write = os.pipe()
+    controls = TerminalControls()
+    controls.fd = read
+    try:
+        os.write(write, b"\x1b[")
+        controls.check_pause()
+        os.write(write, b"D \x1b[C")
+        with pytest.raises(PauseRequested, match="SPACE"):
+            controls.poll()
+        assert controls.poll() == []
+    finally:
+        os.close(read)
+        os.close(write)

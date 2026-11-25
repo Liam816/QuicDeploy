@@ -1,8 +1,9 @@
-"""Non-blocking arrow keys for an attended terminal; Ctrl+C remains a signal.
+"""Non-blocking keys for an attended terminal; Ctrl+C remains a signal.
 
-值守终端的非阻塞方向键控制；Ctrl+C 仍作为信号处理。
+值守终端的非阻塞按键控制；Ctrl+C 仍作为信号处理。
     LEFT  -> "home"   smooth return to the initial pose, then pause / 平滑回初始位并暂停
     RIGHT -> "resume" resume from a fresh observation / 从新观测恢复策略
+    SPACE -> hold in place and pause / 原地保持并暂停
 """
 import os
 import select
@@ -12,6 +13,10 @@ import termios
 
 class RehomeRequested(Exception):
     pass
+
+
+class PauseRequested(Exception):
+    """The operator pressed SPACE in the deployment terminal."""
 
 
 class TerminalControls:
@@ -41,15 +46,27 @@ class TerminalControls:
             finally:
                 self.saved = None
 
-    def poll(self):
-        """Decode buffered ANSI arrow sequences into events. / 把缓冲的方向键转义序列解码为事件。"""
+    def pause_requested(self):
+        """Give SPACE priority while keeping arrow keys buffered for poll()."""
         if self.fd is None:
-            return []
+            return False
         while select.select([self.fd], [], [], 0)[0]:
             data = os.read(self.fd, 1024)
             if not data:
                 raise RuntimeError("Deployment terminal disconnected")
+            if b" " in data:
+                self.buffer = b""
+                return True
             self.buffer += data
+        return False
+
+    def check_pause(self):
+        if self.pause_requested():
+            raise PauseRequested("SPACE pressed")
+
+    def poll(self):
+        """Decode buffered ANSI arrow sequences into events. / 把缓冲的方向键转义序列解码为事件。"""
+        self.check_pause()
         events = []
         while self.buffer:
             if self.buffer[:1] != b"\x1b":

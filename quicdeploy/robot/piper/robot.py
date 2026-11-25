@@ -30,7 +30,7 @@ import numpy as np
 from ...common.layout import SIDES
 from .camera import OpenCVCamera
 from .config import PiperConfig
-from .native_worker import vector
+from .native_worker import HOMING_PAUSE_FILE, vector
 from .startup import check_can, connect_camera, resolve_startup, verify_reference
 
 # Fields forwarded to each worker. / 转发给每个子进程的配置字段。
@@ -71,7 +71,8 @@ class PiperDualArm:
         self._startup_directory = None
 
     # ------------------------------------------------------------------ lifecycle
-    def connect(self):
+    def connect(self, *, pause_requested=lambda: False):
+        """Connect both workers, returning False if startup homing was paused."""
         if self._connected:
             raise RuntimeError("Piper robot already connected")
         cfg = self.config
@@ -89,22 +90,43 @@ class PiperDualArm:
                 continue
             if is_original_can_controller(command):
                 raise RuntimeError("Stop the original Dora CAN followers before connecting")
+        paused = False
+
+        def check_pause():
+            nonlocal paused
+            if not paused and pause_requested():
+                paused = True
+                if self._startup_directory is not None:
+                    (Path(self._startup_directory.name) / HOMING_PAUSE_FILE).touch()
+
         try:
             if self._startup_pose is not None:
                 # Shared dual-arm barrier directory for synchronized homing.
                 # 双臂同步回零使用的共享屏障目录。
                 self._startup_directory = tempfile.TemporaryDirectory(prefix="quicdeploy-piper-init-")
             for camera in self.cameras.values():
+                check_pause()
                 connect_camera(camera)
-            if self._startup_pose is not None:
+            check_pause()
+            if self._startup_pose is not None and not paused:
                 print(
                     "Opening both grippers and smoothly homing both arms with native MIT: "
                     f"max {cfg.startup_home_speed_deg_s:g} deg/s, {cfg.startup_home_acc_deg_s2:g} deg/s².",
                     flush=True,
                 )
             for side in SIDES:
+                check_pause()
                 self._start_worker(side)
             for side, (process, sock, log) in self._workers.items():
+                deadline = time.monotonic() + cfg.startup_timeout_s
+                while True:
+                    check_pause()
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError(f"{side} MIT worker startup timed out; log: {log}")
+                    if select.select([sock], [], [], min(0.05, remaining))[0]:
+                        break
+                check_pause()
                 reply = json.loads(sock.recv(16384))
                 if not reply.get("ready"):
                     raise RuntimeError(f"{side} startup failed: {reply.get('error')}; log: {log}")
@@ -112,9 +134,11 @@ class PiperDualArm:
                 if process.poll() is not None:
                     raise RuntimeError(f"{side} worker exited; log: {log}")
                 sock.settimeout(cfg.response_timeout_s)
+            check_pause()
             self._connected = True
-            if self._startup_pose is not None:
+            if self._startup_pose is not None and not paused:
                 print("Both arms initialized at the configured initial pose.", flush=True)
+            return not paused
         except BaseException:
             self.close()
             raise
@@ -268,29 +292,29 @@ class PiperDualArm:
         self.commands += 1
         return np.asarray(accepted, dtype=float)
 
-    def hold(self):
+    def hold(self, *, current=False):
         """Cancel pending targets and keep native MIT hold. / 取消未完成目标并原地保持。"""
         self._require_connected()
         try:
             for side in SIDES:
-                self._request(side, "hold")
+                self._request(side, "hold", current=current)
         except BaseException:
             self.close()
             raise
 
-    def rehome(self, *, cancel=lambda: False):
+    def rehome(self, *, pause_requested=lambda: False):
         """Smoothly return both arms to the initial pose (dual-arm barrier).
 
         双臂经共享屏障同步、平滑地回到初始位姿；保持相机连接与力矩。
-        Returns False if cancelled. / 被取消时返回 False。
+        Returns False on an operator pause, keeping both workers connected.
         """
         if not self._connected or self._startup_pose is None:
             raise RuntimeError("Homing requires connected workers and an explicit initial pose")
         with tempfile.TemporaryDirectory(prefix="quicdeploy-piper-episode-") as directory:
             try:
-                if cancel():
-                    self.close()
+                if pause_requested():
                     return False
+                paused = False
                 pending = {}
                 # Dispatch BOTH requests before awaiting either barrier. / 先同时下发两条臂的请求。
                 for side in SIDES:
@@ -305,9 +329,10 @@ class PiperDualArm:
                     pending[sock] = (side, self._sequence)
                 deadline = time.monotonic() + self.config.startup_timeout_s
                 while pending:
-                    if cancel():
-                        self.close()
-                        return False
+                    if not paused and pause_requested():
+                        paused = True
+                        (Path(directory) / HOMING_PAUSE_FILE).touch()
+                        deadline = min(deadline, time.monotonic() + self.config.response_timeout_s)
                     if time.monotonic() >= deadline:
                         raise TimeoutError("Both arms did not finish homing in time")
                     for side, (process, _, log) in self._workers.items():
@@ -322,13 +347,16 @@ class PiperDualArm:
                         reply = json.loads(raw)
                         if not reply.get("ok"):
                             raise RuntimeError(f"{side} homing: {reply.get('error')}")
-                        if reply.get("sequence") != seq or not reply.get("homed"):
+                        homed = reply.get("homed")
+                        if reply.get("sequence") != seq or not (homed is True or (paused and homed is False)):
                             raise RuntimeError(f"{side} invalid homing acknowledgement")
                         vector(reply["observation"], 7)
                         del pending[sock]
-                return True
+                return not paused
             except BaseException:
                 # Tell the peer arm before any slow cleanup. / 先通知另一条臂停止。
-                (Path(directory) / "failed").write_text("Parent stopped homing\n")
-                self.close()
+                try:
+                    (Path(directory) / "failed").write_text("Parent stopped homing\n")
+                finally:
+                    self.close()
                 raise

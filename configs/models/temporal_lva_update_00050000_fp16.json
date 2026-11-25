@@ -22,7 +22,7 @@
     "../../quicdeploy/policy/worker.py": "ca775c1aa113c7b3c7b5fd259fa8cfe31fb478d30342e70b039b5b498af3dd79",
     "../../quicdeploy/robot/piper/camera.py": "0b3f9f08e8ecaace5e353e443c948e9c50dca7a9ef3f1ee970056f94456153d7",
     "../../quicdeploy/runtime/inference_metrics.py": "ac7ee41fe4955586dea50742079e0bff064f92db724f8ab1f22752703b6ad2f2",
-    "../../quicdeploy/runtime/live.py": "b8af8a587e8ae6d732eaacd6f5d20a3a4a20433b8aef2f5bc88f88016a9e9857",
+    "../../quicdeploy/runtime/live.py": "d9b7c0f369051820f5459d18940a8afc7ef64fdf6c90f0b06c330056d683d757",
     "../../quicdeploy/runtime/observer.py": "e5e984bd555a3bbd33d382a5dfa7321d4451f73706bf72c4e45fec56f6e42396",
     "../../quicdeploy/runtime/recorder.py": "4fd0f08bf1a206c32bd3951b371e403d55eb4ed12c46fe525781e9447eda3766",
     "../../third_party/dinov3/LICENSE.md": "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e",

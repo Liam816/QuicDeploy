@@ -21,7 +21,7 @@
     "../../quicdeploy/policy/temporal.py": "6a948914a92ba7b05f60af3f4cf5a2335b1e38598bbb7e812c27623dc02f4445",
     "../../quicdeploy/policy/worker.py": "ca775c1aa113c7b3c7b5fd259fa8cfe31fb478d30342e70b039b5b498af3dd79",
     "../../quicdeploy/robot/piper/camera.py": "0b3f9f08e8ecaace5e353e443c948e9c50dca7a9ef3f1ee970056f94456153d7",
-    "../../quicdeploy/runtime/live.py": "b8af8a587e8ae6d732eaacd6f5d20a3a4a20433b8aef2f5bc88f88016a9e9857",
+    "../../quicdeploy/runtime/live.py": "d9b7c0f369051820f5459d18940a8afc7ef64fdf6c90f0b06c330056d683d757",
     "../../quicdeploy/runtime/observer.py": "e5e984bd555a3bbd33d382a5dfa7321d4451f73706bf72c4e45fec56f6e42396",
     "../../third_party/dinov3/LICENSE.md": "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e",
     "../../third_party/dinov3/PROVENANCE.json": "a7eea015a1001d585c506978782a57c47e27a8647e558814762a1211f4e0f26e",

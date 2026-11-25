@@ -71,12 +71,15 @@ class FakeArm:
         self.state[JOINT_COLUMNS] = np.tile([0.0, 40.0, -50.0, 40.0, 0.0, 0.0], 2)
         self.state[[6, 13]] = [35.0, 50.0]
         self.commands = self.holds = self.rehomes = 0
+        self.position_holds = []
         FakeArm.instances.append(self)
 
-    def connect(self):
+    def connect(self, *, pause_requested):
+        paused = pause_requested()
         # Like OpenCVCamera warmup: wait for a first frame. / 与真实相机预热一致，等待首帧。
         while any(camera.latest_frame is None for camera in self.cameras.values()):
             time.sleep(0.01)
+        return not paused
 
     def read_joints(self):
         return self.state.copy()
@@ -86,12 +89,14 @@ class FakeArm:
         self.commands += 1
         return self.state.copy()
 
-    def hold(self):
+    def hold(self, *, current=False):
         self.holds += 1
+        if current:
+            self.position_holds.append(self.commands)
 
-    def rehome(self):
+    def rehome(self, *, pause_requested):
         self.rehomes += 1
-        return True
+        return not pause_requested()
 
     def close(self):
         for camera in self.cameras.values():
@@ -103,7 +108,7 @@ class FakeWorker:
     120ms 后返回一段缓慢沿 +x 漂移的动作块，并保留 RTC 前缀。
     """
 
-    def __init__(self, config):
+    def __init__(self, config, *, record_diagnostics=False):
         self.pending = None
         self.temporal = config.get("temporal_sampling")
         self.vision_session, self.vision_index = None, None
@@ -164,6 +169,7 @@ class FakeControls:
         self.t0 = time.monotonic()
 
     def poll(self):
+        self.check_pause()
         if self.t0 is None:
             return []
         now = time.monotonic() - self.t0
@@ -171,8 +177,17 @@ class FakeControls:
         self.script = [(at, key) for at, key in self.script if at > now]
         return due
 
+    def pause_requested(self):
+        return False
+
+    def check_pause(self):
+        from quicdeploy.runtime.controls import PauseRequested
+
+        if self.pause_requested():
+            raise PauseRequested("SPACE pressed")
+
     def discard(self):
-        pass
+        self.check_pause()
 
     def close(self):
         pass
@@ -219,3 +234,60 @@ def test_live_session_simulated(patched, mode, config_path, model_card):
     assert all(event["latency_equivalent_hz"] > 0 for event in events)
     assert [event["sequence"] for event in events] == list(range(1, len(events) + 1))
     assert "error" not in result, result.get("error")
+
+
+@pytest.mark.parametrize("phase", ["startup", "pending", "active", "rehome"])
+def test_live_space_pauses_and_resumes_from_fresh_observation(patched, monkeypatch, phase):
+    session = patched.LiveSession(_config(), duration_s=2.0)
+    session.controls.script = [(0.05, "home")] if phase == "rehome" else []
+    pressed = False
+    paused_ticks = 0
+    requests = []
+    original_poll = session.controls.poll
+    original_submit = FakeWorker.submit
+
+    def press_space():
+        nonlocal pressed
+        if pressed:
+            return False
+        homing = bool(session.result.get("home_events"))
+        pressed = (phase == "startup" and session.robot is None
+                   or phase == "pending" and session.pending_request is not None
+                   or phase == "active" and session.robot is not None and session.robot.commands > 0
+                   or phase == "rehome" and homing)
+        return pressed
+
+    def keys():
+        nonlocal paused_ticks
+        if session.operator_paused:
+            arm = FakeArm.instances[-1]
+            assert arm.commands == arm.position_holds[-1]
+            paused_ticks += 1
+            if paused_ticks == 1:
+                return ["home"]  # Position hold requires an explicit RIGHT.
+            if paused_ticks == 2:
+                return ["resume"]
+        return original_poll()
+
+    def capture_submit(worker, observation, context):
+        requests.append((context["anchor_index"], context["prefix_absolute"] is None))
+        return original_submit(worker, observation, context)
+
+    monkeypatch.setattr(session.controls, "pause_requested", press_space)
+    monkeypatch.setattr(session.controls, "poll", keys)
+    monkeypatch.setattr(FakeWorker, "submit", capture_submit)
+    result = session.run()
+    arm = FakeArm.instances[-1]
+    pause, = result["operator_pause_events"]
+    discarded = pause["discarded_request_step"]
+    assert pressed and paused_ticks >= 2
+    assert result["startup_homing_completed"] == (phase != "startup")
+    assert arm.rehomes == (1 if phase == "rehome" else 0)
+    assert len(arm.position_holds) == 1
+    assert result["hardware_commands"] == arm.commands > arm.position_holds[0]
+    assert "error" not in result and "cleanup_errors" not in result
+    if phase == "pending":
+        assert discarded == 0 and requests[:2] == [(0, True), (1, True)]
+        assert discarded not in {event["step"] for event in result["prediction_events"]}
+    if phase == "rehome":
+        assert result["home_events"][0]["status"] == "paused_in_place"

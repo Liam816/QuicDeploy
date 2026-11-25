@@ -28,7 +28,7 @@ Modes / 模式:
 
 Pauses (robot holds, queue discarded, RIGHT resumes from a fresh observation):
 暂停情形（机械臂保持、丢弃队列、按 → 从新观测恢复）:
-    ControlTimingError (late_policy=hold), SceneChangedError, LEFT key (rehome).
+    ControlTimingError (late_policy=hold), SceneChangedError, LEFT (rehome), SPACE (in-place hold).
 """
 import fcntl
 import os
@@ -43,7 +43,7 @@ from ..planning.scheduler import PrefixWindowExpired, QueueScheduler
 from ..policy.worker import InferenceWorker
 from ..robot.guard import CommandGuard
 from ..robot.piper.robot import PiperDualArm
-from .controls import RehomeRequested, TerminalControls
+from .controls import PauseRequested, RehomeRequested, TerminalControls
 from .observer import SynchronizedObserver
 from .recorder import RunRecorder
 from .safety import ControlTimingError, SceneChangedError, check_tick_budget, confirm_still, verify_chunk
@@ -91,6 +91,8 @@ class LiveSession:
         self.policy_origin = None        # None => next chunk starts with a held inference / 下一块需静止推理
         self.held = True                 # robot currently holding / 机械臂当前处于保持
         self.paused = False
+        self.operator_paused = False
+        self.resume_requested = False
         self.last_command = None         # last guarded command (sync hold check) / 最后一条放行指令
         self.last_reply = None
         self.measured = None
@@ -109,15 +111,18 @@ class LiveSession:
                 self._start()
                 while self._time_left():
                     try:
-                        self._tick()
-                    except ControlTimingError as exc:
-                        if self.exe["late_policy"] != "hold":
-                            raise
-                        self._on_timing_pause(exc)
-                    except SceneChangedError as exc:
-                        self._on_scene_changed(exc)
-                    except RehomeRequested:
-                        self._on_rehome()
+                        try:
+                            self._tick()
+                        except ControlTimingError as exc:
+                            if self.exe["late_policy"] != "hold":
+                                raise
+                            self._on_timing_pause(exc)
+                        except SceneChangedError as exc:
+                            self._on_scene_changed(exc)
+                        except RehomeRequested:
+                            self._on_rehome()
+                    except PauseRequested:
+                        self._on_space_pause()
                 self.result["status"] = "paused" if self.paused else "passed"
             except BaseException as exc:
                 if self.robot is not None:
@@ -135,6 +140,9 @@ class LiveSession:
 
     def _start(self):
         config = self.config
+        self.controls.open()
+        print("Deployment keys: LEFT = smooth return + pause; RIGHT = resume from fresh observation; "
+              "SPACE = hold in place + pause; Ctrl+C = stop", flush=True)
         # 1) IK subprocess + FK/IK self-check / IK 子进程与自检
         self.ik = Kinematics(config["kinematics"], self.rec.ik_log)
         self.result["kinematics"] = check_kinematics(self.ik, config["guard"])
@@ -145,17 +153,21 @@ class LiveSession:
         self.result["hardware_commands_scope"] = "policy send() calls; native homing/hold excluded"
         # 3) Robot: enable + smooth startup homing (REAL MOTION) / 机械臂：使能并平滑回初始位（真机运动）
         robot = PiperDualArm(config["robot"], rate_hz=self.exe["control_hz"])
-        robot.connect()
+        homed = robot.connect(pause_requested=self.controls.pause_requested)
         self.robot = robot
-        self.result["startup_homing_completed"] = True
-        robot.hold()
-        self.controls.open()
-        self.controls.discard()
-        print("Deployment keys: LEFT = smooth return + pause; RIGHT = resume from fresh observation; Ctrl+C = stop",
-              flush=True)
+        self.result["startup_homing_completed"] = homed
         self.guard = CommandGuard(config["guard"])
-        self._new_queue()
         self.started = time.monotonic()
+        if not homed:
+            self._on_space_pause()
+            return
+        robot.hold()
+        try:
+            self.controls.discard()
+        except PauseRequested:
+            self._on_space_pause()
+        else:
+            self._new_queue()
 
     def _cleanup(self):
         # Each resource is released even if an earlier one fails.
@@ -216,12 +228,15 @@ class LiveSession:
                            ik_diagnostics=ik_details, wrist_ik_target=ik.wrist(requested).tolist())
             command, interventions = guard.apply(requested, measured, self.tick_dt)
             details.update(interventions)
+            self.controls.check_pause()
             details.update(send_started_at=time.monotonic(), send_attempted=True)
             accepted = self.robot.send(command)
             details.update(send_finished_at=time.monotonic(), command_sent=True)
             if not np.allclose(accepted, command, atol=1e-6):
                 raise RuntimeError("Piper acknowledgement differs from guarded joint command")
             details["status"] = "sent"
+        except PauseRequested:
+            raise
         except BaseException as exc:
             details.update(status="send_failed" if details["send_attempted"] else "rejected", error=repr(exc))
             if hasattr(exc, "ik_diagnostics"):
@@ -254,14 +269,17 @@ class LiveSession:
         if self.paused:
             keys = self.controls.poll()
             self.measured = self.observer.sample()
-            if "home" in keys:
+            if "home" in keys and not self.operator_paused:
                 raise RehomeRequested
-            if "resume" not in keys:
+            self.resume_requested |= "resume" in keys
+            if self.pending_request is not None:
+                self._poll_paused_inference()
+            if not self.resume_requested or self.pending_request is not None:
                 time.sleep(self.tick_dt)
                 return
-            if self.config["model"].get("temporal_sampling"):
+            if self.operator_paused or self.config["model"].get("temporal_sampling"):
                 self._new_queue()
-            self.paused = False
+            self.resume_requested = self.operator_paused = self.paused = False
             print("Resuming policy from fresh observation; old queue and RTC prefix discarded.", flush=True)
         self._check_home()
         loop_start = time.monotonic()
@@ -297,6 +315,7 @@ class LiveSession:
         request = self.scheduler.prepare(step, observation["timestamp"], observation["eef_state"],
                                          requested_at=time.monotonic())
         self.pending_request = request
+        self.pending_since = time.monotonic()
         self.worker.submit(observation, _context(step, None))
         reply = self.worker.wait(self.exe["max_inference_wait_s"], on_tick=self._check_home)
         self.rec.record_inference(reply, step=step)
@@ -317,7 +336,7 @@ class LiveSession:
             "expired_steps": accepted.expired_steps, "gap_s": accepted.gap_s,
         })
         self.rec.save_prediction(step, reply, accepted, request, observation, held_verified=True)
-        self.pending_request = None
+        self.pending_request = self.pending_since = None
         self.next_step += 1
         self.ik.reset(after)
         self.guard.reset(after)
@@ -327,7 +346,9 @@ class LiveSession:
         """hold → held inference → play the whole chunk → hold. / 停 → 静止推理 → 播放整块 → 停。"""
         self._hold()
         accepted = self._held_inference(bootstrap=False)
-        time.sleep(max(0, accepted.e.times[0] - time.monotonic()))
+        while (delay := accepted.e.times[0] - time.monotonic()) > 0:
+            self.controls.check_pause()
+            time.sleep(min(self.tick_dt, delay))
         while self._time_left():
             self._check_home()
             deadline = time.monotonic() + self.tick_dt
@@ -466,12 +487,12 @@ class LiveSession:
         """
         if self.pending_request is not None:
             if wait_reply:
-                reply = self.worker.wait(self.exe["max_inference_wait_s"])
+                reply = self.worker.wait(self.exe["max_inference_wait_s"], on_tick=self.controls.check_pause)
                 self.rec.record_inference(reply, step=self.pending_request.step)
             self.next_step = max(self.next_step, self.pending_request.step + 1)
         self.pending_request = self.pending_since = self.pending_observation = None
 
-    def _reset_paused(self, *, clear_last_command=True):
+    def _reset_paused(self, *, clear_last_command=True, discard_keys=True):
         """Fresh queue + observer, IK/guard re-seeded from measured joints, paused.
         新建队列与观测器，用实测关节重置 IK/指令保护，并进入暂停。
         """
@@ -483,7 +504,34 @@ class LiveSession:
             self.last_command = None
         self.policy_origin = None
         self.paused = True
-        self.controls.discard()
+        self.resume_requested = False
+        if discard_keys:
+            self.controls.discard()
+
+    def _poll_paused_inference(self):
+        """Drain an old reply without giving it to the new scheduler."""
+        reply = self.worker.poll()
+        if reply is not None:
+            self.rec.record_inference(reply, step=self.pending_request.step)
+            self._discard_pending(wait_reply=False)
+        elif time.monotonic() - self.pending_since > self.exe["max_inference_wait_s"]:
+            raise TimeoutError("Discarded inference did not finish while paused")
+
+    def _on_space_pause(self):
+        if self.operator_paused:
+            self.resume_requested = False
+            return
+        self.robot.hold(current=True)
+        self.held = True
+        event = {"event": "operator_pause", "time": time.monotonic(), "reason": "space",
+                 "discarded_request_step": None if self.pending_request is None else self.pending_request.step}
+        self.rec.append("operator_pause_events", event)
+        self.result["hold_events"].append(event)
+        self.rec.write_event(event)
+        self.last_reply = None
+        self._reset_paused(discard_keys=False)
+        self.operator_paused = True
+        print("SPACE: holding current position. Press RIGHT to infer from fresh observation.", flush=True)
 
     def _on_timing_pause(self, exc):
         # No catch-up commands: hold, discard the queue, await manual resume.
@@ -497,7 +545,7 @@ class LiveSession:
         self._discard_pending(wait_reply=True)
         self._reset_paused()
         print(f"Control timing overrun; holding and paused: {exc}. "
-              "Press RIGHT to resume from fresh observation; LEFT = home; Ctrl+C = stop.", flush=True)
+              "Press RIGHT to resume from fresh observation; LEFT = home; SPACE = hold in place; Ctrl+C = stop.", flush=True)
 
     def _on_scene_changed(self, exc):
         # The held reply was already consumed; it is discarded with the queue.
@@ -515,7 +563,7 @@ class LiveSession:
         self._reset_paused(clear_last_command=False)
         print(f"Scene changed; prediction discarded and policy paused: {exc}. "
               "Keep the scene stable, then press RIGHT to infer from a fresh observation; "
-              "LEFT = return to initial pose; Ctrl+C = exit.", flush=True)
+              "LEFT = return to initial pose; SPACE = hold in place; Ctrl+C = stop.", flush=True)
 
     def _on_rehome(self):
         self._hold()
@@ -523,9 +571,10 @@ class LiveSession:
                  "discarded_request_step": None if self.pending_request is None else self.pending_request.step}
         self.rec.append("home_events", event)
         print("LEFT: holding policy, smoothly returning both arms to the configured initial pose...", flush=True)
-        if not self.robot.rehome():
-            raise RuntimeError("Return to initial pose was cancelled")
+        if not self.robot.rehome(pause_requested=self.controls.pause_requested):
+            event.update(status="paused_in_place", completed_at=time.monotonic())
+            raise PauseRequested("SPACE pressed during homing")
         self._discard_pending(wait_reply=True)
         self._reset_paused()
         event.update(status="paused_at_initial", completed_at=time.monotonic())
-        print("At initial pose and paused. Press RIGHT to resume; Ctrl+C to exit.", flush=True)
+        print("At initial pose and paused. Press RIGHT to resume; Ctrl+C to stop.", flush=True)

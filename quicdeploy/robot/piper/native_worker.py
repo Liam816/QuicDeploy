@@ -81,6 +81,25 @@ class FeedbackReceipts:
             )
 
 
+HOMING_PAUSE_FILE = "pause"
+
+
+class HomingPaused(Exception):
+    """The parent requested an in-place pause during homing."""
+
+
+def latch_hold_position(arm, measured):
+    import numpy as np
+
+    measured = np.asarray(measured, dtype=float)
+    if measured.shape != (6,) or not np.isfinite(measured).all():
+        raise ValueError("Invalid joint feedback for MIT hold")
+    arm._cmd = measured.copy()
+    arm._mit_q_send = measured.copy()
+    arm._mit_vel[:] = 0
+    arm._mit_acc[:] = 0
+
+
 class NativeController:
     def __init__(self, arm, config, limits, clock=time.monotonic):
         self.arm, self.config, self.limits, self.clock = arm, config, limits, clock
@@ -204,6 +223,18 @@ class NativeController:
             if self.clock() - self.arm._last_send_at > self.config["command_timeout_s"]:
                 raise RuntimeError("Native MIT driver is not completing sends")
 
+    def hold_current(self):
+        """Cancel the active target and hold the freshly measured joint pose."""
+        import numpy as np
+
+        self.target = None
+        if self.arm._is_teaching():
+            raise RuntimeError("Arm is in teaching/leader mode")
+        measured = self.observe()
+        latch_hold_position(self.arm, np.deg2rad(measured[:6]))
+        self.arm.keepalive()
+        return measured
+
     def reply(self, request):
         seq = request.get("sequence")
         try:
@@ -213,9 +244,12 @@ class NativeController:
             if op == "observe":
                 result = {"observation": self.observe()}
             elif op == "hold":
-                self.target = None
-                self.arm.keepalive()
-                result = {"observation": self.observe()}
+                if request.get("current"):
+                    result = {"observation": self.hold_current()}
+                else:
+                    self.target = None
+                    self.arm.keepalive()
+                    result = {"observation": self.observe()}
             elif op == "action":
                 result = {"action": self.command(request["action"], request["sent_at"])}
             else:
@@ -259,15 +293,19 @@ def serve(sock, controller, startup=None):
         sock.sendall(json.dumps(reply, allow_nan=False).encode())
 
 
-def initialization_clock(sock, directory, clock=time.monotonic):
-    """Check parent cancellation and peer failure before each homing iteration."""
+def initialization_clock(sock, directory, clock=time.monotonic, *, allow_pause=False):
+    """Check peer failure, parent disconnection and an optional operator pause."""
+    failed = Path(directory) / "failed"
+    pause = Path(directory) / HOMING_PAUSE_FILE
 
     def checked():
-        if (Path(directory) / "failed").exists():
-            raise RuntimeError("Peer initialization failed; stop homing: " + (Path(directory) / "failed").read_text().strip())
+        if failed.exists():
+            raise RuntimeError("Peer initialization failed; stop homing: " + failed.read_text().strip())
         readable, _, _ = select.select([sock], [], [], 0)
         if readable:
             raise RuntimeError("Parent cancelled/disconnected during initialization")
+        if allow_pause and pause.exists():
+            raise HomingPaused("Operator paused homing")
         return clock()
 
     return checked
@@ -358,12 +396,7 @@ def move_episode_to_pose(
         # Only re-anchor to feedback that passes the same freshness checks.
         try:
             measured = np.asarray(observe(), dtype=float)
-            if measured.shape != (6,) or not np.isfinite(measured).all():
-                raise ValueError("Invalid abort feedback")
-            arm._cmd = measured.copy()
-            arm._mit_q_send = measured.copy()
-            arm._mit_vel[:] = 0
-            arm._mit_acc[:] = 0
+            latch_hold_position(arm, measured)
             print("[homing-abort] " + json.dumps({"side": config.get("side"),
                 "error": str(exc), "hold_measured_deg": np.rad2deg(measured).tolist()}), flush=True)
         except Exception as feedback_error:
@@ -389,15 +422,16 @@ def rehome(controller, request, startup, sock):
         controller.observe()
         if controller.arm._is_teaching():
             raise RuntimeError("Teaching mode during episode homing")
-        controller.arm._gripper_cmd = current["arms"][cfg["side"]]["initial_gripper_openness"]
-        controller.arm.keepalive()
-        initialize_arm(controller.arm, cfg, startup, sock, episode=True)
-        return {
-            "sequence": request["sequence"],
-            "ok": True,
-            "homed": True,
-            "observation": controller.observe(),
-        }
+        try:
+            initialization_clock(sock, directory, allow_pause=True)()
+            controller.arm._gripper_cmd = current["arms"][cfg["side"]]["initial_gripper_openness"]
+            controller.arm.keepalive()
+            initialize_arm(controller.arm, cfg, startup, sock, episode=True)
+        except HomingPaused:
+            return {"sequence": request["sequence"], "ok": True, "homed": False,
+                    "observation": controller.hold_current()}
+        return {"sequence": request["sequence"], "ok": True, "homed": True,
+                "observation": controller.observe()}
     except BaseException as exc:
         with contextlib.suppress(OSError):
             (directory / "failed").write_text(f"{cfg['side']}: {exc}\n")
@@ -472,7 +506,9 @@ def _initialize_arm(arm, config, startup, sock, *, episode=False):
     import numpy as np
 
     directory = Path(config["barrier_dir"])
-    clock = initialization_clock(sock, directory)
+    # Startup must confirm feedback and gripper readiness before it can
+    # accept a pause and become available to the policy.
+    clock = initialization_clock(sock, directory, allow_pause=episode)
     clock()
     side = config["side"]
     arm_config = config["initial_pose"]["arms"][side]
@@ -487,6 +523,9 @@ def _initialize_arm(arm, config, startup, sock, *, episode=False):
         # Compatibility for upstream/test arms without the production receive hook.
         startup.wait_for_initial_gripper(arm, arm_config, clock=clock)
         observe = lambda: startup.observe_arm(arm)
+    if not episode:
+        clock = initialization_clock(sock, directory, allow_pause=True)
+    clock()
     phase = "episode" if episode else "startup"
     speed = config[f"{phase}_home_speed_deg_s"]
     acceleration = config[f"{phase}_home_acc_deg_s2"]
@@ -623,17 +662,24 @@ def main():
         if arm._agx is None or not arm.use_mit:
             raise RuntimeError("Native MIT driver unavailable")
         arm._feedback_receipts = FeedbackReceipts(arm)
+        startup_paused = False
         if startup is not None:
-            initialize_arm(arm, config, startup, sock)
+            try:
+                initialize_arm(arm, config, startup, sock)
+            except HomingPaused:
+                startup_paused = True
         arm.min_dt = 1 / config["rate_hz"]
         controller = NativeController(arm, config, LIMITS_DEG)
         # Startup alignment belongs to the Teleoperator; the Robot API accepts
         # absolute joints, so a policy can use the same Robot without VR.
         deadline = time.monotonic() + config["feedback_timeout_s"] * 4
         while True:
-            arm.keepalive()
             try:
-                state = controller.observe()
+                if startup_paused:
+                    state = controller.hold_current()
+                else:
+                    arm.keepalive()
+                    state = controller.observe()
                 break
             except RuntimeError:
                 if time.monotonic() >= deadline:

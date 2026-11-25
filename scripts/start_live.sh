@@ -10,7 +10,7 @@
 #   QUICDEPLOY_MODEL    model card overriding the YAML model / 覆盖 YAML 中模型的模型卡
 #   PIPER_DIAGNOSTICS  1 = save every prediction (npz), 0/unset = off / 1 保存每次预测
 #   PYTHON_BIN         interpreter (default quic-deploy conda env) / Python 解释器
-# Keys while running / 运行时按键: LEFT = smooth return + pause, RIGHT = resume, Ctrl+C = stop.
+# Keys while running / 运行时按键: LEFT = smooth return + pause, RIGHT = resume, SPACE = hold in place + pause, Ctrl+C = stop.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
